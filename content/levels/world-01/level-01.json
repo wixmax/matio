@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "id": "world-01-level-01",
+  "name": "Sunny Meadow",
+  "tileSize": 64,
+  "size": {
+    "width": 40,
+    "height": 15
+  },
+  "theme": "meadow",
+  "spawn": {
+    "x": 2,
+    "y": 12
+  },
+  "goal": {
+    "x": 37,
+    "y": 12
+  },
+  "terrain": [
+    {
+      "type": "ground",
+      "x": 0,
+      "y": 13,
+      "width": 40,
+      "height": 2
+    },
+    {
+      "type": "platform",
+      "x": 8,
+      "y": 9,
+      "width": 4,
+      "height": 1
+    },
+    {
+      "type": "platform",
+      "x": 15,
+      "y": 7,
+      "width": 3,
+      "height": 1
+    },
+    {
+      "type": "block",
+      "x": 22,
+      "y": 11,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "type": "water",
+      "x": 27,
+      "y": 13,
+      "width": 4,
+      "height": 2
+    }
+  ],
+  "objects": [
+    {
+      "type": "coin",
+      "x": 6,
+      "y": 11
+    },
+    {
+      "type": "coin",
+      "x": 7,
+      "y": 11
+    },
+    {
+      "id": "star-01",
+      "type": "star",
+      "x": 16,
+      "y": 5
+    },
+    {
+      "type": "bomb",
+      "x": 23,
+      "y": 10
+    },
+    {
+      "id": "shield-01",
+      "type": "shield",
+      "x": 31,
+      "y": 8
+    }
+  ]
+}
