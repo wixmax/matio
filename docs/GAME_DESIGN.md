@@ -1,5 +1,10 @@
 # Game Design — Adventure Platformer
 
+Task 006-A adds run-specific bomb pickups and throwable Arcade projectiles.
+X/J or the touch THROW control launches a bomb in the player's facing direction.
+After its fuse, a radius-based explosion damages enemies through their existing
+health and defeat scoring. Bombs do not damage the player or terrain.
+
 ## 1. Concept
 
 A colorful, cartoon 2D side-scrolling platformer. The player runs and jumps through handcrafted
@@ -65,8 +70,8 @@ themes, backgrounds and parallax.
 
 ### Collectibles and power-ups
 Coins and collectible stars are implemented: JSON placement, idempotent overlap, HUD counters,
-score feedback, persistent best-collection records. Bombs, shields, magnets and temporary effects
-remain planned.
+score feedback, persistent best-collection records. Bomb pickups and throws operate within the
+current run. Shields, magnets and temporary effects remain planned.
 
 ### Scoring and progression
 Score breakdown (coins, collectible stars, enemy defeats, completion), 1–3 star rating, explicit
@@ -78,7 +83,7 @@ achievements and cloud save remain planned.
 Implemented in Task 005: JSON archetypes (mushroom, snail, spiky), deterministic patrol behavior,
 stomp classification, multi-hit enemies, non-stompable hazards, player health, invulnerability,
 knockback, defeat scoring and a Game Over/retry flow. Still planned: chase/flyer/turret behaviors,
-enemy projectiles, bosses, bombs/projectiles/shields and respawning enemies.
+enemy projectiles, bosses, shields and respawning enemies.
 
 ### Meta systems (later)
 Shop, inventory, achievements, daily quests, daily rewards, lucky spin. These must remain optional

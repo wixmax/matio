@@ -205,16 +205,15 @@ export function findSolidTerrainAtCell(
 }
 
 /**
- * Future object policy: bomb/shield/magnet remain valid content but have no
- * runtime behavior in Task 004. Coin/star are implemented and therefore not
- * reported here.
+ * Future object policy: shield/magnet remain valid content without runtime
+ * behavior. Coin/star/bomb are implemented and therefore not reported here.
  */
 export function summarizeUnimplementedObjects(level: LevelDefinition): IgnoredObjectSummary {
   const byType: Partial<Record<LevelObjectType, number>> = {};
   let total = 0;
 
   for (const object of level.objects) {
-    if (isCollectibleType(object.type) || isEnemyObject(object)) {
+    if (isCollectibleType(object.type) || isEnemyObject(object) || object.type === 'bomb') {
       continue;
     }
 

@@ -1,5 +1,23 @@
 # Architecture
 
+## Task 006-A bomb combat
+
+`content/config/bombs.json` is validated before startup. Each GameScene run owns a
+`BombSystem` and in-memory `BombInventory`. Validated level `bomb` objects become
+nonblocking overlap pickups at cell centers. A full inventory leaves the pickup in
+place. Falling retains inventory, collected pickups, score and live projectiles.
+Retry creates a fresh run.
+
+InputManager merges X/J and touch THROW into one press. BombSystem checks cooldown,
+ammunition and active projectile count before spending. Arcade projectiles share
+one texture, collide with solid terrain and bounce modestly. The fuse advances
+with gameplay time. Explosion circles intersect enemy body rectangles, then call
+EnemySystem for damage and EnemyLedger scoring. Victory, Game Over and shutdown
+remove active bombs and explosion graphics. Both the fuse and the graphics
+advance with gameplay time, so neither needs an asynchronous callback.
+Future breakable blocks may separately consume explosion
+positions and radii without changing enemy damage or inventory.
+
 ## 1. Stack
 
 | Layer | Choice | Version | Rationale |
@@ -151,7 +169,7 @@ core/level-repository  ──►  systems/LevelRepository
 - Returns `LevelRuntime` with geometry, solid bodies, goal runtime, collectibles, enemies, backdrop
   and the unimplemented-object report.
 - Does not create the player, input, camera, HUD or player-facing colliders/overlaps.
-- Logs ignored `bomb`/`shield`/`magnet` objects, collectible totals and enemy counts in development.
+- Logs ignored `shield`/`magnet` objects, collectible totals and enemy counts in development.
 
 ### TerrainFactory (`src/factories/TerrainFactory.ts`)
 
@@ -275,7 +293,7 @@ model (`systems/player-health.ts`); the Player never decides how much damage it 
 - `content/levels/**/*.json` is discovered by eager raw glob; editing/adding JSON requires only a
   reload/rebuild. Adding `level-04.json` needs no TypeScript changes.
 - Enemy placements reference an archetype by ID; LevelLoader rejects unknown IDs or unsafe cells.
-- Valid-but-unimplemented objects (`bomb`/`shield`/`magnet`) remain ignored with dev diagnostics.
+- Valid-but-unimplemented objects (`shield`/`magnet`) remain ignored with dev diagnostics.
 - Invalid content never silently falls back to a different level.
 
 ## 11. UI, debug and errors

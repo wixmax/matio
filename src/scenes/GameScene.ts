@@ -6,6 +6,7 @@ import {
   FALL_RESPAWN_MARGIN_TILES,
 } from '../core/level-config';
 import { requireCombatConfig } from '../core/combat-config';
+import { requireBombConfig } from '../core/bomb-config';
 import { requireEnemiesConfig } from '../core/enemies-config';
 import { requirePlayerConfig } from '../core/player-config';
 import { getLevelRepository } from '../core/level-repository';
@@ -15,6 +16,7 @@ import { Player } from '../entities/Player';
 import { InputManager } from '../input/InputManager';
 import { CollectionSystem } from '../systems/CollectionSystem';
 import { EnemySystem } from '../systems/EnemySystem';
+import { BombSystem } from '../systems/BombSystem';
 import {
   canStartCompletion,
   canStartGameOver,
@@ -67,6 +69,7 @@ export class GameScene extends Phaser.Scene {
   private geometry: LevelGeometry | null = null;
   private collectionSystem: CollectionSystem | null = null;
   private enemySystem: EnemySystem | null = null;
+  private bombSystem: BombSystem | null = null;
   private health: PlayerHealth | null = null;
 
   private explicitLevelId: string | undefined;
@@ -89,6 +92,7 @@ export class GameScene extends Phaser.Scene {
     this.geometry = null;
     this.collectionSystem = null;
     this.enemySystem = null;
+    this.bombSystem = null;
     this.health = null;
   }
 
@@ -172,6 +176,8 @@ export class GameScene extends Phaser.Scene {
     const input = this.inputManager.getInputState();
     this.player.tick(delta, input);
     this.enemySystem?.update(delta);
+    this.bombSystem?.update(delta);
+    if (this.inputManager.consumeThrowRequest()) this.bombSystem?.throw();
 
     const fallLimit =
       this.geometry.worldHeight + FALL_RESPAWN_MARGIN_TILES * this.geometry.tileSize;
@@ -280,6 +286,8 @@ export class GameScene extends Phaser.Scene {
       onPlayerDamaged: () => this.updateHud(),
       onPlayerDefeated: () => this.handlePlayerDefeated(),
     });
+    this.bombSystem = new BombSystem(this, level, this.player, this.enemySystem,
+      runtime.solids, requireBombConfig(), () => this.updateHud());
 
     this.configureCamera(runtime.geometry, this.player);
 
@@ -327,6 +335,7 @@ export class GameScene extends Phaser.Scene {
       score: this.currentCollectedScore(),
       health: this.health.health,
       maxHealth: this.health.maxHealth,
+      bombs: this.bombSystem?.inventory.quantity ?? 0,
     });
   }
 
@@ -382,6 +391,7 @@ export class GameScene extends Phaser.Scene {
     const enemySnapshot = this.enemySystem?.snapshot;
 
     collection.freeze();
+    this.bombSystem?.freeze();
     this.enemySystem?.freeze();
     this.inputManager?.destroy();
     this.inputManager = null;
@@ -464,6 +474,7 @@ export class GameScene extends Phaser.Scene {
     const snapshot = collection.snapshot;
 
     collection.freeze();
+    this.bombSystem?.freeze();
     this.enemySystem?.freeze();
     this.inputManager?.destroy();
     this.inputManager = null;
@@ -510,6 +521,8 @@ export class GameScene extends Phaser.Scene {
     // the scene; only explicit system colliders and global input listeners need
     // teardown.
     this.enemySystem?.destroy();
+    this.bombSystem?.destroy();
+    this.bombSystem = null;
     this.enemySystem = null;
     this.collectionSystem = null;
     this.health = null;

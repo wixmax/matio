@@ -139,8 +139,8 @@ describe('level geometry - terrain classification', () => {
       ],
     });
 
-    expect(summary.total).toBe(3);
-    expect(summary.byType).toEqual({ bomb: 1, shield: 1, magnet: 1 });
+    expect(summary.total).toBe(2);
+    expect(summary.byType).toEqual({ shield: 1, magnet: 1 });
   });
 
   it('builds deterministic placements for coins and stars only', () => {

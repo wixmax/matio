@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "bomb": {
+    "maxInventory": 5,
+    "initialInventory": 0,
+    "throwVelocityX": 430,
+    "throwVelocityY": -300,
+    "gravity": 1600,
+    "fuseMs": 1000,
+    "explosionRadius": 110,
+    "damage": 1,
+    "throwCooldownMs": 350,
+    "maxActiveBombs": 3
+  }
+}

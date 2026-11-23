@@ -26,6 +26,7 @@
   "objects": [
     { "type": "coin", "x": 6, "y": 11 },
     { "type": "coin", "x": 7, "y": 11 },
+    { "id": "bomb-01", "type": "bomb", "x": 7, "y": 12 },
     { "id": "star-01", "type": "star", "x": 9, "y": 10 },
     { "type": "coin", "x": 10, "y": 11 },
     { "type": "coin", "x": 14, "y": 11 },

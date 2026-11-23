@@ -84,8 +84,8 @@ describe('collectible geometry - tile centers', () => {
   it('reports unimplemented object types separately from collectibles', () => {
     const summary = summarizeUnimplementedObjects(createTestLevel());
 
-    expect(summary.total).toBe(2);
-    expect(summary.byType).toEqual({ bomb: 1, shield: 1 });
+    expect(summary.total).toBe(1);
+    expect(summary.byType).toEqual({ shield: 1 });
   });
 
   it('computes collectible totals from validated placements', () => {

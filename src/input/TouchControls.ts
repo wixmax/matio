@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../core/constants';
 import { TouchControlButton } from './TouchControlButton';
 
-type TouchControl = 'left' | 'right' | 'jump';
+type TouchControl = 'left' | 'right' | 'jump' | 'throw';
 
 const LEFT_POSITION = { x: 108, y: GAME_HEIGHT - 116 } as const;
 const RIGHT_POSITION = { x: 228, y: GAME_HEIGHT - 116 } as const;
 const JUMP_POSITION = { x: GAME_WIDTH - 128, y: GAME_HEIGHT - 126 } as const;
+const THROW_POSITION = { x: GAME_WIDTH - 280, y: GAME_HEIGHT - 126 } as const;
 
 const MOVE_RADIUS = 52;
 const JUMP_RADIUS = 62;
@@ -29,6 +30,7 @@ export class TouchControls {
   private readonly pointerControls = new Map<number, TouchControl>();
 
   private jumpPressedQueued = false;
+  private throwPressedQueued = false;
   private destroyed = false;
 
   constructor(scene: Phaser.Scene) {
@@ -51,8 +53,12 @@ export class TouchControls {
       radius: JUMP_RADIUS,
       onPointerDown: (pointerId) => this.assignPointer(pointerId, 'jump'),
     });
+    const throwButton = new TouchControlButton(scene, THROW_POSITION.x, THROW_POSITION.y, {
+      icon: 'throw', radius: MOVE_RADIUS,
+      onPointerDown: (pointerId) => this.assignPointer(pointerId, 'throw'),
+    });
 
-    this.buttons = { left, right, jump };
+    this.buttons = { left, right, jump, throw: throwButton };
 
     scene.input.on(Phaser.Input.Events.POINTER_UP, this.onPointerUp, this);
     scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onPointerUp, this);
@@ -83,10 +89,17 @@ export class TouchControls {
     return true;
   }
 
+  consumeThrowPressed(): boolean {
+    const pressed = this.throwPressedQueued;
+    this.throwPressedQueued = false;
+    return pressed;
+  }
+
   /** Releases every pointer (focus loss, pause, shutdown). */
   releaseAll(): void {
     this.pointerControls.clear();
     this.jumpPressedQueued = false;
+    this.throwPressedQueued = false;
 
     for (const button of Object.values(this.buttons)) {
       button.setPressed(false);
@@ -128,6 +141,7 @@ export class TouchControls {
     if (control === 'jump') {
       this.jumpPressedQueued = true;
     }
+    if (control === 'throw') this.throwPressedQueued = true;
   }
 
   private releasePointer(pointerId: number): void {

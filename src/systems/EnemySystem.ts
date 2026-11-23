@@ -6,6 +6,7 @@ import type { CombatConfig, HealthSnapshot } from '../types/combat';
 import { addUiText } from '../ui/components/ui-text';
 import { PALETTE, toCssColor } from '../ui/theme';
 import { classifyEnemyContact, resolveKnockbackDirection } from './combat-rules';
+import { explosionIntersectsRect } from './bomb-rules';
 import { EnemyLedger } from './enemy-ledger';
 import type { PlayerHealth } from './player-health';
 
@@ -94,6 +95,18 @@ export class EnemySystem {
     return this.ledger.points;
   }
 
+  /** Shared damage entry point for external attacks, including explosions. */
+  damageEnemiesInRadius(x: number, y: number, radius: number, damage: number): void {
+    if (this.frozen) return;
+    for (const enemy of this.runtime.enemies) {
+      if (!enemy.active || !enemy.isAlive) continue;
+      const body = enemy.arcadeBody;
+      if (explosionIntersectsRect(x, y, radius, body)) {
+        this.applyDamage(enemy, damage);
+      }
+    }
+  }
+
   /** Advances invulnerability and every living enemy's patrol. */
   update(deltaMs: number): void {
     if (this.frozen) {
@@ -167,17 +180,15 @@ export class EnemySystem {
   };
 
   private resolveStomp(enemy: Enemy): void {
-    const result = enemy.takeDamage(1);
-
-    if (!result.applied) {
-      return;
+    if (this.applyDamage(enemy, 1)) {
+      this.player.bounce(this.combat.stomp.bounceVelocity);
     }
+  }
 
-    this.player.bounce(this.combat.stomp.bounceVelocity);
-
-    if (result.defeated) {
-      this.recordDefeat(enemy);
-    }
+  private applyDamage(enemy: Enemy, amount: number): boolean {
+    const result = enemy.takeDamage(amount);
+    if (result.defeated) this.recordDefeat(enemy);
+    return result.applied;
   }
 
   private resolvePlayerDamage(enemy: Enemy): void {

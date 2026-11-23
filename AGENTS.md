@@ -1,5 +1,11 @@
 # AGENTS.md — Instructions for AI Coding Agents
 
+Task 006-A bomb rules: tuning is validated from `content/config/bombs.json`.
+`BombSystem` owns run inventory, pickups, Arcade projectiles and explosion lifetime.
+External enemy damage enters through `EnemySystem`, which retains health and
+`EnemyLedger` ownership. Bomb pickups never affect coin/star scoring or saves.
+Freeze active bombs on victory, Game Over and shutdown.
+
 This repository is an incremental, reviewed game project. You are the implementation agent; a
 technical architect reviews each task. Read this file before doing anything.
 
@@ -12,7 +18,7 @@ technical architect reviews each task. Read this file before doing anything.
 - Current milestone: **Task 005 complete** — JSON-driven levels, terrain/collision generation,
   goal marker, camera follow, collectibles, scoring/rating, progression, local save, plus JSON
   enemy archetypes, patrol behavior, stomp/damage combat, player health/invulnerability and a
-  Game Over/retry flow. Bombs/projectiles/shields/magnets remain future work.
+  Game Over/retry flow. TASK 006-A adds player bomb pickups, throws and explosion combat.
 
 ## Mandatory rules
 
@@ -181,7 +187,7 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
 - Add/change levels without editing TypeScript; use `?level=<id>` in development to load one.
 - Player configuration is versioned JSON (`content/config/player.json`, schema 1). Validate it and
   keep movement tuning there.
-- Valid-but-unimplemented object entries (`bomb`, `shield`, `magnet`) are preserved in JSON and
+- Valid-but-unimplemented object entries (`shield`, `magnet`) are preserved in JSON and
   ignored at runtime with development diagnostics. Never turn them into coins or award score.
 - `content/config/scoring.json` is versioned (`schemaVersion: 1`) and validated by
   `validateScoringConfig()` before gameplay starts.

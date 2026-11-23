@@ -29,7 +29,7 @@ export interface LevelRuntime {
   readonly collectibles: CollectibleRuntime;
   /** Enemy instances and the dynamic group used for collision/overlap. */
   readonly enemies: EnemyRuntime;
-  /** Valid future object types (bomb/shield/magnet) deliberately not created. */
+  /** Valid future object types (shield/magnet) deliberately not created. */
   readonly unimplementedObjects: IgnoredObjectSummary;
 }
 
@@ -86,6 +86,17 @@ export function loadLevel(
         details: enemyIssues,
       },
     };
+  }
+
+  const blockedBomb = level.objects.find((object) =>
+    object.type === 'bomb' && findSolidTerrainAtCell(level, object) !== null,
+  );
+  if (blockedBomb !== undefined) {
+    return { ok: false, error: {
+      code: 'invalid-level', levelId: level.id,
+      message: `Level "${level.id}" contains a bomb pickup inside solid terrain.`,
+      details: [{ path: '$.objects', message: `bomb pickup at (${blockedBomb.x}, ${blockedBomb.y}) must occupy an empty cell.` }],
+    } };
   }
 
   const geometry = createLevelGeometry(level);

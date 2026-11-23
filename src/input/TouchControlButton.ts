@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { PALETTE } from '../ui/theme';
 
-export type TouchControlIcon = 'left' | 'right' | 'jump';
+export type TouchControlIcon = 'left' | 'right' | 'jump' | 'throw';
 
 export interface TouchControlButtonOptions {
   readonly icon: TouchControlIcon;
@@ -121,6 +121,10 @@ export class TouchControlButton extends Phaser.GameObjects.Container {
           radius * 0.36,
           3,
         );
+        break;
+      case 'throw':
+        this.background.fillCircle(0, 5, radius * 0.32);
+        this.background.fillRect(-4, -radius * 0.42, 8, radius * 0.2);
         break;
     }
   }

@@ -3,6 +3,7 @@ import './styles/main.css';
 import { createGameConfig } from './core/game-config';
 import { installDevErrorOverlay, showBlockingError } from './core/error-overlay';
 import { formatCombatConfigErrors, getCombatConfigResult } from './core/combat-config';
+import { getBombConfigResult } from './core/bomb-config';
 import { formatEnemiesConfigErrors, getEnemiesConfigResult } from './core/enemies-config';
 import { getLevelOrderResult } from './core/level-order-config';
 import { getLevelRepository } from './core/level-repository';
@@ -17,6 +18,7 @@ const playerConfigResult = getPlayerConfigResult();
 const scoringConfigResult = getScoringConfigResult();
 const enemiesConfigResult = getEnemiesConfigResult();
 const combatConfigResult = getCombatConfigResult();
+const bombConfigResult = getBombConfigResult();
 const levelOrderResult = getLevelOrderResult();
 const problems: string[] = [];
 
@@ -38,6 +40,9 @@ if (!enemiesConfigResult.ok) {
 
 if (!combatConfigResult.ok) {
   problems.push(`content/config/combat.json\n${formatCombatConfigErrors(combatConfigResult.errors)}`);
+}
+if (!bombConfigResult.ok) {
+  problems.push(`content/config/bombs.json\n${bombConfigResult.errors.map((e) => `${e.path}: ${e.message}`).join('\n')}`);
 }
 
 if (!levelOrderResult.ok) {
@@ -72,6 +77,7 @@ if (problems.length > 0) {
   scoringConfigResult.ok &&
   enemiesConfigResult.ok &&
   combatConfigResult.ok &&
+  bombConfigResult.ok &&
   levelOrderResult.ok
 ) {
   const game = new Phaser.Game(createGameConfig(playerConfigResult.value));

@@ -10,6 +10,7 @@ export interface GameHudSnapshot {
   readonly score: number;
   readonly health: number;
   readonly maxHealth: number;
+  readonly bombs: number;
 }
 
 /**
@@ -26,10 +27,12 @@ export class GameHud {
   private readonly countersText: Phaser.GameObjects.Text;
   private readonly scoreText: Phaser.GameObjects.Text;
   private readonly healthText: Phaser.GameObjects.Text;
+  private readonly bombsText: Phaser.GameObjects.Text;
 
   private lastCounters = '';
   private lastScore = '';
   private lastHealth = '';
+  private lastBombs = '';
 
   constructor(
     scene: Phaser.Scene,
@@ -89,8 +92,13 @@ export class GameHud {
       .setScrollFactor(0)
       .setDepth(2110);
 
+    this.bombsText = addUiText(scene, centerX + 135, 92, '', {
+      fontStyle: 'bold', fontSize: '18px', color: toCssColor(PALETTE.sun),
+      stroke: toCssColor(PALETTE.ink), strokeThickness: 3,
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(2110);
+
     this.update(
-      { coins: 0, stars: 0, score: 0, health: initialHealth, maxHealth },
+      { coins: 0, stars: 0, score: 0, health: initialHealth, maxHealth, bombs: 0 },
       false,
     );
   }
@@ -99,11 +107,12 @@ export class GameHud {
     const counters = `COINS ${snapshot.coins}/${this.totals.coins}    STARS ${snapshot.stars}/${this.totals.stars}`;
     const score = `SCORE ${snapshot.score}`;
     const health = formatHealth(snapshot.health, snapshot.maxHealth);
+    const bombs = `BOMBS × ${snapshot.bombs}`;
 
     if (
       counters === this.lastCounters &&
       score === this.lastScore &&
-      health === this.lastHealth
+      health === this.lastHealth && bombs === this.lastBombs
     ) {
       return;
     }
@@ -113,10 +122,12 @@ export class GameHud {
     this.lastCounters = counters;
     this.lastScore = score;
     this.lastHealth = health;
+    this.lastBombs = bombs;
 
     this.countersText.setText(counters);
     this.scoreText.setText(score);
     this.healthText.setText(health);
+    this.bombsText.setText(bombs);
 
     if (pulse && countersChanged) {
       this.scene.tweens.killTweensOf(this.countersText);
