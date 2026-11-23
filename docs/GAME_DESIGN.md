@@ -89,26 +89,30 @@ Original character skins, animation sets, particles, music and sound effects, vi
 
 Details and naming rules live in [ASSET_GUIDE.md](ASSET_GUIDE.md).
 
-## 7. Current milestone (Task 002)
+## 7. Current milestone (Task 003)
 
 Implemented: a reusable Arcade Physics player, acceleration/deceleration, variable-height jump,
-coyote time, jump buffering, unified keyboard/touch input, on-screen touch controls, a temporary
-test arena with platforms/gap/respawn, procedural placeholder visual states, external movement
-tuning and a development HUD.
+coyote time, jump buffering, unified keyboard/touch input, JSON-driven level discovery and validation,
+terrain generation with static collisions, goal markers, camera follow with world bounds, fall
+respawn, loading error handling, and three playable test levels. Procedural placeholder visuals and
+a development HUD remain.
 
-In scope for this milestone: movement feel, collision reliability, touch parity and test coverage.
+In scope for this milestone: a reusable JSON-driven world, camera behavior, collision correctness,
+level authoring without TypeScript, and loading diagnostics.
 
-Out of scope: enemies, coins, power-ups, combat, level loading/rendering, Tiled/editor integration,
-inventory, shop, daily rewards, achievements, save data, ads, Android packaging and final art/audio.
+Out of scope: enemies, coins, power-ups, combat, goal completion/scoring, level progression,
+Tiled/editor integration, inventory, shop, daily rewards, achievements, save data, ads, Android
+packaging and final art/audio.
 
-Success for this milestone: the player can run, stop, jump, land, reach platforms, fall into the gap
-and respawn; keyboard and simultaneous touch inputs never stick; configuration is external and
-validated; tests and production build pass.
+Success for this milestone: levels load from JSON, the player spawns and collides correctly, all
+shipped levels are reachable and can be selected in development, invalid/unknown levels show clear
+errors, the camera follows within bounds while HUD/touch UI stay fixed, and tests/build pass.
 
 ### Milestone history
 
 - **Task 001** — project foundation, scene navigation, responsive config, level-data contract.
 - **Task 002** — player controller, Arcade Physics and unified input.
+- **Task 003** — JSON level repository/loader, terrain/collision generation, goal markers and camera.
 
 ## 8. Product success criteria for the first playable
 

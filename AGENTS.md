@@ -9,8 +9,9 @@ technical architect reviews each task. Read this file before doing anything.
   **Vitest 5.1.1**, npm, JSON content, Phaser Arcade Physics.
 - Logical resolution 1280×720, landscape-first, FIT scaling, WebGL with Canvas fallback.
 - No React/Vue/Angular/Next.js, no backend, no authentication, no database, no cloud services.
-- Current milestone: **Task 002 complete** — player controller, Arcade Physics, unified
-  keyboard/touch input, external player tuning. Level loading is the next planned area.
+- Current milestone: **Task 003 complete** — JSON-driven levels, terrain/collision generation,
+  goal marker, camera follow, level error handling and three test levels. Collectibles, goal
+  completion/scoring and progression are next.
 
 ## Mandatory rules
 
@@ -50,8 +51,8 @@ technical architect reviews each task. Read this file before doing anything.
 
 Do not add any of the following without an explicit task:
 
-- Level loading, level rendering, Tiled/editor integration or a level editor.
-- Enemies, AI, combat, coins, power-ups, inventory, scoring, save data.
+- Tiled/editor integration, a level editor, enemies, AI, combat, coins/power-ups, inventory,
+  goal completion/scoring, save data.
 - Shop, achievements, daily quests, daily rewards, lucky spin, ads.
 - Final art/audio, full-screen/orientation lock, Android/Capacitor packaging.
 - New runtime dependencies, state libraries, UI frameworks, backends or analytics.
@@ -93,8 +94,10 @@ changes. The dev server uses a fixed port so review steps stay stable.
 | Tests | `tests/` |
 | Developer scripts | `tools/` |
 
-Import direction must stay acyclic: `core -> scenes -> ui/components + systems + types`.
-`systems` and `types` must never import scenes or UI. `types/` must stay Phaser-free.
+Import direction must stay acyclic:
+`core -> scenes -> entities + input + ui + systems + factories + types`.
+Pure systems and `types/` must never import scenes or UI. `types/` must stay Phaser-free.
+`LevelLoader` is the one Phaser-aware system; it may import factories and level geometry.
 
 ## Technical conventions
 
@@ -110,6 +113,20 @@ Import direction must stay acyclic: `core -> scenes -> ui/components + systems +
   the scene. Movement uses Arcade velocity/acceleration; never move the player by editing `x`/`y`.
 - Sprite origin is (0.5, 1) with the body offset defined in `src/entities/player-textures.ts`. Keep
   body metrics and frame sizes consistent when changing visuals.
+- Level layouts exist only in `content/levels/**/*.json`; never add level arrays or coordinates to
+  scenes/factories. Discovery is the eager raw `import.meta.glob` in `src/core/level-repository.ts`.
+- Load levels through `LevelRepository` → `loadLevel` → `createLevelGeometry`. Do not use `fetch`,
+  Node `fs`, hardcoded catalogs or a partial "best effort" render.
+- Terrain `x/y` is top-left in tiles; spawn/goal are cells whose world anchor is bottom-center:
+  `(x·tile + tile/2, (y+1)·tile)`. Preserve the player feet-origin convention.
+- Every solid area gets one static body; `water` is intentionally non-solid. Do not add per-tile
+  bodies or move players manually during physics updates.
+- Camera bounds come from JSON size; smoothing is 0.1 on X/Y with zoom 1. HUD/touch UI must keep
+  `scrollFactor(0)` so it stays fixed while following.
+- Fall respawn uses `worldHeight + 2 * tileSize`; do not hardcode screen pixel limits.
+- Invalid/unknown/duplicate levels must show `LevelErrorPanel` and never start gameplay.
+- Valid-but-unimplemented object entries are ignored with dev diagnostics; do not convert them into
+  unrelated systems.
 - Every `Text` object uses `addUiText()` so DPR-aware `resolution` is applied consistently.
 - Container hit areas use **top-left box coordinates** (0,0 → width,height), not centered
   coordinates. See `TextButton` and `TouchControlButton`.
@@ -127,8 +144,10 @@ Import direction must stay acyclic: `core -> scenes -> ui/components + systems +
 ## Content rules
 
 - Levels are versioned JSON (`schemaVersion: 1`), documented in `docs/LEVEL_FORMAT.md`.
-- Coordinates are tile units; X right, Y down; default tile size 64 px.
+- Level IDs are unique kebab-case strings; filenames are discovered automatically but are not the ID.
+- Coordinates are tile units; X right, Y down; default tile size 64 px; spawn/goal bottom-center.
 - Validate content and fail visibly with `path`/`message` errors. Never silently skip invalid data.
+- Add/change levels without editing TypeScript; use `?level=<id>` in development to load one.
 - Player configuration is versioned JSON (`content/config/player.json`, schema 1). Validate it and
   keep movement tuning there.
 - Schema changes bump `schemaVersion` and ship with migration + tests.
@@ -137,15 +156,16 @@ Import direction must stay acyclic: `core -> scenes -> ui/components + systems +
 
 ## Testing and evidence
 
-- Unit-test pure logic in `tests/` with Vitest (Node environment). Use the shipped example level
-  and shipped player config where they strengthen content tests.
-- For scenes/input, start the dev server, exercise keyboard and touch controls, verify restart
-  cleanup, resize the window, and check the console. Take screenshots where practical.
+- Unit-test pure logic in `tests/` with Vitest (Node environment). Use the shipped levels and player
+  config where they strengthen content tests.
+- For scene/input/level changes: start the dev server, load each affected level (`?level=`), check
+  spawn alignment, terrain/colliders, gaps/water respawn, goal marker, camera bounds/follow, fixed
+  HUD/touch UI, error handling, restart cleanup and console output.
 - Force touch controls with `?touch=1` when the test machine has no touchscreen. Synthetic touch
   events verify the Phaser input path, not a real device; say which was used.
 - If a background browser tab throttles `requestAnimationFrame`, stop `game.loop` and call
   `game.step(time, 16.666)` manually for deterministic verification. Do not ship that as logic.
-- Report exact command output ("47 tests passed", build sizes, console errors), not claims.
+- Report exact command output (e.g. "71 tests passed", build sizes, console errors), not claims.
 - Never describe unexecuted checks as successful.
 
 ## Reporting

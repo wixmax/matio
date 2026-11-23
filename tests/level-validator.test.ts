@@ -46,7 +46,7 @@ describe('validateLevel - valid content', () => {
     }
 
     expect(result.value.id).toBe('world-01-level-01');
-    expect(result.value.name).toBe('Sunny Meadow');
+    expect(result.value.name).toBe('Green Introduction');
     expect(result.value.schemaVersion).toBe(1);
     expect(result.value.tileSize).toBe(64);
     expect(result.value.size).toEqual({ width: 40, height: 15 });

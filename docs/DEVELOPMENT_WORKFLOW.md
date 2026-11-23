@@ -121,9 +121,35 @@ For input/physics work specifically:
    occluded and throttles `requestAnimationFrame`, stop `game.loop` and drive deterministic frames
    with `game.step(time, 16.666)` for verification; never ship that as game logic.
 
+For level/camera work:
+
+1. Load the default level and each changed level with `?level=<id>`.
+2. Confirm the player spawns with feet on the expected ground (no tile/body offset).
+3. Confirm each solid type collides, water does not, and terrain visuals match the data.
+4. Walk into every declared gap/water area and confirm respawn at the JSON spawn.
+5. Confirm the goal marker is at the goal cell and stays in world space.
+6. Scroll to both horizontal/vertical world edges and confirm camera clamping.
+7. Confirm HUD/touch controls remain fixed while the camera moves.
+8. Load an unknown ID and confirm the error panel lists available levels and BACK TO MENU works.
+9. Restart the scene repeatedly and compare static/dynamic body counts and text/listener counts.
+
 Report what was actually observed. "Should work" is not verification. If a check could not run in
 the environment, say so explicitly. Synthetic touch events are not a substitute for claiming
 real-device testing.
+
+## 7. Level content workflow
+
+- Levels live in `content/levels/<world>/*.json`; discovery is automatic via the raw glob in
+  `src/core/level-repository.ts`.
+- Use the existing schema; never duplicate validation rules or add a second level format.
+- Place spawn/goal in empty cells directly above solid terrain (bottom-center anchor).
+- Keep rectangles within bounds; one static body per solid area.
+- Prefer reachable geometry (steps ≤ ~100 px, gaps ≤ ~3 tiles with current tuning).
+- Test the level via `?level=<id>`, then run `npm run test`, `npm run typecheck`, `npm run build`.
+- Add a level without editing TypeScript. The practical tutorial lives in
+  `docs/LEVEL_FORMAT.md#9-how-to-create-level-04json-without-modifying-typescript`.
+- Valid-but-unimplemented object entries must remain ignored with dev diagnostics; do not implement
+  collectibles as a side effect.
 
 ## 7. Git conventions
 
@@ -148,6 +174,8 @@ Before handing off, confirm:
 - [ ] Touch: forced controls show; LEFT/RIGHT/JUMP and multitouch were exercised (state whether on a
       real device or via synthetic events).
 - [ ] Input cleanup: restarting the scene does not duplicate keyboard/pointer listeners or captures.
+- [ ] Levels: all affected IDs load; spawn/terrain/goal/camera and gaps/water/error states verified.
+- [ ] Restart: static/dynamic body counts, text objects and listeners stay stable.
 - [ ] Content: no hardcoded level data; JSON (levels and player config) validated.
 - [ ] Console: no uncaught errors or warnings introduced.
 - [ ] Assets: no unapproved art/audio added; naming and grid rules respected.

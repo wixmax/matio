@@ -5,6 +5,10 @@ import { PALETTE, toCssColor } from '../theme';
 import { addUiText } from './ui-text';
 
 export interface DebugHudState {
+  readonly levelId: string;
+  readonly levelName: string;
+  readonly scrollX: number;
+  readonly scrollY: number;
   readonly velocityX: number;
   readonly velocityY: number;
   readonly grounded: boolean;
@@ -41,6 +45,9 @@ export class DebugHud {
   update(state: DebugHudState): void {
     const rendered = [
       'PLAYER DEBUG',
+      state.levelName,
+      state.levelId,
+      `scroll ${Math.round(state.scrollX)},${Math.round(state.scrollY)}`,
       `vx ${formatSigned(state.velocityX)}   vy ${formatSigned(state.velocityY)}`,
       `state ${state.visualState}   grounded ${state.grounded ? 'yes' : 'no'}`,
       `coyote ${state.coyoteAvailable ? 'yes' : 'no'}   buffer ${state.jumpBuffered ? 'yes' : 'no'}`,
