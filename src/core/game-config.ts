@@ -4,6 +4,7 @@ import { BootScene } from '../scenes/BootScene';
 import { MenuScene } from '../scenes/MenuScene';
 import { GameScene } from '../scenes/GameScene';
 import { PALETTE } from '../ui/theme';
+import type { PlayerConfig } from '../types/player-config';
 
 /**
  * Builds the single source of truth for the Phaser game configuration.
@@ -13,10 +14,11 @@ import { PALETTE } from '../ui/theme';
  *   viewport while preserving the 16:9 aspect ratio.
  * - `Phaser.AUTO` picks WebGL and falls back to the Canvas renderer when WebGL
  *   is unavailable, so the game still boots on restrictive devices.
- * - Keyboard, mouse and touch are all enabled now; the shared input abstraction
- *   arrives with gameplay in a later task.
+ * - Arcade Physics is enabled here with gravity sourced from validated external
+ *   configuration (`content/config/player.json`), never from scene code.
+ * - Four active pointers allow left + right + jump + one spare simultaneously.
  */
-export function createGameConfig(): Phaser.Types.Core.GameConfig {
+export function createGameConfig(playerConfig: PlayerConfig): Phaser.Types.Core.GameConfig {
   return {
     type: Phaser.AUTO,
     parent: 'game-root',
@@ -44,8 +46,17 @@ export function createGameConfig(): Phaser.Types.Core.GameConfig {
       mouse: true,
       touch: true,
       gamepad: false,
-      activePointers: 2,
+      activePointers: 4,
       windowEvents: true,
+    },
+    physics: {
+      default: 'arcade',
+      arcade: {
+        gravity: { x: 0, y: playerConfig.movement.gravity },
+        debug: false,
+        fixedStep: true,
+        fps: 60,
+      },
     },
     scene: [BootScene, MenuScene, GameScene],
     callbacks: {
@@ -59,7 +70,7 @@ export function createGameConfig(): Phaser.Types.Core.GameConfig {
         const dpr = window.devicePixelRatio || 1;
 
         console.info(
-          `[${APP_NAME}] v${__APP_VERSION__} | ${renderer} | ${GAME_WIDTH}x${GAME_HEIGHT} logical | DPR ${dpr}`,
+          `[${APP_NAME}] v${__APP_VERSION__} | ${renderer} | ${GAME_WIDTH}x${GAME_HEIGHT} logical | DPR ${dpr} | Arcade gravity ${playerConfig.movement.gravity}px/s²`,
         );
       },
     },

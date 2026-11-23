@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "movement": {
+    "maxSpeed": 260,
+    "acceleration": 1800,
+    "deceleration": 2200,
+    "jumpVelocity": -600,
+    "gravity": 1600,
+    "maxFallSpeed": 900,
+    "coyoteTimeMs": 100,
+    "jumpBufferMs": 120,
+    "jumpCutMultiplier": 0.45
+  }
+}

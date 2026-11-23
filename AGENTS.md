@@ -6,10 +6,11 @@ technical architect reviews each task. Read this file before doing anything.
 ## Project facts
 
 - 2D side-scrolling platformer: **Phaser 4.2.1**, **TypeScript 7.0.2 (strict)**, **Vite 8.3.8**,
-  **Vitest 5.1.1**, npm, JSON content.
+  **Vitest 5.1.1**, npm, JSON content, Phaser Arcade Physics.
 - Logical resolution 1280×720, landscape-first, FIT scaling, WebGL with Canvas fallback.
 - No React/Vue/Angular/Next.js, no backend, no authentication, no database, no cloud services.
-- Current milestone: **Task 001 foundation** — scene navigation and level contract only.
+- Current milestone: **Task 002 complete** — player controller, Arcade Physics, unified
+  keyboard/touch input, external player tuning. Level loading is the next planned area.
 
 ## Mandatory rules
 
@@ -49,10 +50,10 @@ technical architect reviews each task. Read this file before doing anything.
 
 Do not add any of the following without an explicit task:
 
-- Character movement, jumping, physics bodies, level rendering or a level loader.
+- Level loading, level rendering, Tiled/editor integration or a level editor.
 - Enemies, AI, combat, coins, power-ups, inventory, scoring, save data.
 - Shop, achievements, daily quests, daily rewards, lucky spin, ads.
-- Final art/audio, level editor, full-screen/orientation lock, Android/Capacitor packaging.
+- Final art/audio, full-screen/orientation lock, Android/Capacitor packaging.
 - New runtime dependencies, state libraries, UI frameworks, backends or analytics.
 
 If a task seems to require one of these, ask or report the dependency instead of implementing it
@@ -99,21 +100,37 @@ Import direction must stay acyclic: `core -> scenes -> ui/components + systems +
 
 - **Phaser 4 only.** Verify every Phaser API against `node_modules/phaser/types/phaser.d.ts` or the
   bundled `node_modules/phaser/skills/*/SKILL.md`. Phaser 3 code often does not apply.
-- `Phaser.AUTO`, FIT scaling, auto-center, 1280×720 logical size are fixed in
+- `Phaser.AUTO`, FIT scaling, auto-center, 1280×720 logical size and Arcade Physics are fixed in
   `src/core/game-config.ts`. Do not stretch the canvas or introduce fixed pixel device sizes.
+- Player tuning lives in `content/config/player.json`, is imported at build time, and must pass
+  `validatePlayerConfig()`. Never add movement tuning constants to the Player or scene.
+- The Player receives `PlayerInputState`; it must never read keyboard keys, pointers or Phaser input
+  plugins. All device handling belongs in `src/input/`.
+- Jump/coyote/buffer rules belong in `src/systems/jump-controller.ts` (engine-free, tested), not in
+  the scene. Movement uses Arcade velocity/acceleration; never move the player by editing `x`/`y`.
+- Sprite origin is (0.5, 1) with the body offset defined in `src/entities/player-textures.ts`. Keep
+  body metrics and frame sizes consistent when changing visuals.
 - Every `Text` object uses `addUiText()` so DPR-aware `resolution` is applied consistently.
-- Containers used for input need an explicit hit area (see `TextButton`).
-- Clean up listeners/timers added to global managers when a scene shuts down.
+- Container hit areas use **top-left box coordinates** (0,0 → width,height), not centered
+  coordinates. See `TextButton` and `TouchControlButton`.
+- Touch controls are shown on touch devices only; force them with `?touch=1` (dev) or
+  `VITE_FORCE_TOUCH_CONTROLS=true`. Release every pointer on up/up-outside/game-out/blur/pause and
+  remove all listeners, keys and captures on shutdown.
+- Clean up listeners/timers added to global managers when a scene shuts down. Verify scene restart
+  does not duplicate input listeners.
 - Colors and fonts come from `src/ui/theme.ts`; no ad-hoc palette per scene.
 - Runtime units: px/s for speed, px/s² for gravity; level coordinates are tile units.
 - Keep static drawing in `create()`, not in `update()`.
 - No absolute asset URLs; use paths relative to `public/`.
+- `window.__MATIO_GAME__` exists only in dev builds; never depend on it from gameplay code.
 
 ## Content rules
 
 - Levels are versioned JSON (`schemaVersion: 1`), documented in `docs/LEVEL_FORMAT.md`.
 - Coordinates are tile units; X right, Y down; default tile size 64 px.
 - Validate content and fail visibly with `path`/`message` errors. Never silently skip invalid data.
+- Player configuration is versioned JSON (`content/config/player.json`, schema 1). Validate it and
+  keep movement tuning there.
 - Schema changes bump `schemaVersion` and ship with migration + tests.
 - New asset conventions are in `docs/ASSET_GUIDE.md` (kebab-case names, 64 px grid, straight-alpha
   PNG, feet-center pivot). Do not add unapproved art.
@@ -121,10 +138,14 @@ Import direction must stay acyclic: `core -> scenes -> ui/components + systems +
 ## Testing and evidence
 
 - Unit-test pure logic in `tests/` with Vitest (Node environment). Use the shipped example level
-  when it strengthens a content test.
-- For scenes/input, start the dev server, exercise the flow with mouse **and** touch, resize the
-  window, and check the console. Take screenshots where practical.
-- Report exact command output ("16 tests passed", build sizes, console errors), not claims.
+  and shipped player config where they strengthen content tests.
+- For scenes/input, start the dev server, exercise keyboard and touch controls, verify restart
+  cleanup, resize the window, and check the console. Take screenshots where practical.
+- Force touch controls with `?touch=1` when the test machine has no touchscreen. Synthetic touch
+  events verify the Phaser input path, not a real device; say which was used.
+- If a background browser tab throttles `requestAnimationFrame`, stop `game.loop` and call
+  `game.step(time, 16.666)` manually for deterministic verification. Do not ship that as logic.
+- Report exact command output ("47 tests passed", build sizes, console errors), not claims.
 - Never describe unexecuted checks as successful.
 
 ## Reporting

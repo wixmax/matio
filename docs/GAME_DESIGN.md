@@ -56,8 +56,8 @@ Long-term loop: unlocking worlds, skins, achievements and daily goals.
 These are planned, not implemented. Order may change after review.
 
 ### Movement and platforming
-Run, jump, variable jump height, coyote time, jump buffer, slopes (if levels need them), moving
-platforms, one-way platforms, water behavior.
+Run, jump, variable jump height, coyote time, jump buffer (implemented). Still planned: slopes (if
+levels need them), moving platforms, one-way platforms, water behavior.
 
 ### World content
 JSON-driven levels, terrain (ground, platforms, blocks, water), level goals, world map, level
@@ -89,18 +89,26 @@ Original character skins, animation sets, particles, music and sound effects, vi
 
 Details and naming rules live in [ASSET_GUIDE.md](ASSET_GUIDE.md).
 
-## 7. Current milestone (Task 001)
+## 7. Current milestone (Task 002)
 
-In scope: project foundation, scene navigation, responsive configuration, level-data contract,
-validation, documentation.
+Implemented: a reusable Arcade Physics player, acceleration/deceleration, variable-height jump,
+coyote time, jump buffering, unified keyboard/touch input, on-screen touch controls, a temporary
+test arena with platforms/gap/respawn, procedural placeholder visual states, external movement
+tuning and a development HUD.
 
-Out of scope: movement, jumping, physics, enemies, collectibles, combat, inventory, achievements,
-shop, daily rewards, ads, Android packaging, final graphics, level editor, full level rendering,
-cloud services.
+In scope for this milestone: movement feel, collision reliability, touch parity and test coverage.
 
-Success for this milestone: `npm run dev` opens a menu with a working START GAME button, the
-button responds to mouse and touch, GameScene renders a clear placeholder, and the level contract
-is validated by tests.
+Out of scope: enemies, coins, power-ups, combat, level loading/rendering, Tiled/editor integration,
+inventory, shop, daily rewards, achievements, save data, ads, Android packaging and final art/audio.
+
+Success for this milestone: the player can run, stop, jump, land, reach platforms, fall into the gap
+and respawn; keyboard and simultaneous touch inputs never stick; configuration is external and
+validated; tests and production build pass.
+
+### Milestone history
+
+- **Task 001** — project foundation, scene navigation, responsive config, level-data contract.
+- **Task 002** — player controller, Arcade Physics and unified input.
 
 ## 8. Product success criteria for the first playable
 

@@ -108,8 +108,22 @@ For any scene, layout or input change:
 5. Resize the viewport/window and confirm the 16:9 canvas stays centered without stretching.
 6. Check the browser console for errors and the dev error overlay for failures.
 
+For input/physics work specifically:
+
+1. Verify keyboard movement, release-to-stop, jump, landing and platforms.
+2. Verify no double jump and that holding jump does not repeat.
+3. Exercise touch controls: LEFT, RIGHT, JUMP, RIGHT+JUMP together, releasing one finger while the
+   other stays held, sliding off a button, and focus loss.
+4. Force touch controls when testing on desktop: `?touch=1` (dev) or
+   `VITE_FORCE_TOUCH_CONTROLS=true` (any build).
+5. Restart `GameScene` several times and confirm keyboard/pointer listener counts do not grow.
+6. Use `window.__MATIO_GAME__` (dev only) to inspect scene/player state. If a browser tab is
+   occluded and throttles `requestAnimationFrame`, stop `game.loop` and drive deterministic frames
+   with `game.step(time, 16.666)` for verification; never ship that as game logic.
+
 Report what was actually observed. "Should work" is not verification. If a check could not run in
-the environment, say so explicitly.
+the environment, say so explicitly. Synthetic touch events are not a substitute for claiming
+real-device testing.
 
 ## 7. Git conventions
 
@@ -130,9 +144,13 @@ Before handing off, confirm:
 - [ ] Tests: `npm run test` passes, with new coverage for new logic.
 - [ ] Build: `npm run build` succeeds.
 - [ ] Runtime: `npm run dev` boots; expected navigation/interaction was observed.
+- [ ] Physics/input: movement, jump, platforms, respawn and release-to-stop were exercised.
+- [ ] Touch: forced controls show; LEFT/RIGHT/JUMP and multitouch were exercised (state whether on a
+      real device or via synthetic events).
+- [ ] Input cleanup: restarting the scene does not duplicate keyboard/pointer listeners or captures.
+- [ ] Content: no hardcoded level data; JSON (levels and player config) validated.
 - [ ] Console: no uncaught errors or warnings introduced.
 - [ ] Assets: no unapproved art/audio added; naming and grid rules respected.
-- [ ] Content: no hardcoded level data; JSON validated.
 - [ ] Android/browser: no Node-only APIs, no absolute asset URLs, touch still works.
 - [ ] Report: honest about limitations and unverified behavior.
 

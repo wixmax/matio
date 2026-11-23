@@ -123,13 +123,11 @@ export class TextButton extends Phaser.GameObjects.Container {
   }
 
   private refreshHitArea(): void {
+    // Container hit-test coordinates are offset by the container's display
+    // origin (half of its size), so the hit area is expressed from (0,0) to
+    // (width,height) even though children are drawn centered on (0,0).
     this.setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(
-        -this.buttonWidth / 2,
-        -this.buttonHeight / 2,
-        this.buttonWidth,
-        this.buttonHeight,
-      ),
+      hitArea: new Phaser.Geom.Rectangle(0, 0, this.buttonWidth, this.buttonHeight),
       hitAreaCallback: Phaser.Geom.Rectangle.Contains,
       useHandCursor: true,
     });

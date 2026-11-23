@@ -1,33 +1,206 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../core/constants';
-import { PALETTE, toCssColor } from '../ui/theme';
-import { addUiText } from '../ui/components/ui-text';
+import { requirePlayerConfig } from '../core/player-config';
+import { Player } from '../entities/Player';
+import { InputManager } from '../input/InputManager';
 import { DEFAULT_TILE_SIZE } from '../types/level';
-
-const GROUND_TOP = 560;
+import { DebugHud } from '../ui/components/DebugHud';
+import { addUiText } from '../ui/components/ui-text';
+import { PALETTE, toCssColor } from '../ui/theme';
 
 /**
- * GameScene - development playground.
+ * GameScene - playable movement prototype (Task 002).
  *
- * Task 001 scope: a static, non-interactive placeholder that proves navigation
- * works and gives Task 002 a canvas to build movement on. It intentionally does
- * NOT read level JSON yet, and contains no physics, enemies or collectibles.
- *
- * Level layout data must never be hardcoded here; the block below is scene
- * presentation (background + ground band), not game content.
+ * The arena below is temporary scene presentation, not level content. It exists
+ * to exercise gravity, collisions, platforms, the gap/respawn flow and touch
+ * controls. A future LevelLoader will replace it with validated JSON terrain.
  */
+
+const GROUND_TOP = 620;
+const GROUND_HEIGHT = GAME_HEIGHT - GROUND_TOP;
+const PLATFORM_HEIGHT = 10;
+const SPAWN = { x: 340, y: GROUND_TOP - 4 } as const;
+const RESPAWN_BELOW_Y = GAME_HEIGHT + 120;
+
+const GROUND_SEGMENTS = [
+  { x: 0, width: 700 },
+  { x: 840, width: GAME_WIDTH - 840 },
+] as const;
+
+/**
+ * [x, topY, width] - four distinct heights. Platforms are thin and high enough
+ * that the 84px collision body (top at ground-84) can walk beneath them, while
+ * the ground-level ones stay inside the default jump arc (~112px rise).
+ */
+const PLATFORMS = [
+  { x: 420, topY: 514, width: 180 },
+  { x: 640, topY: 440, width: 120 },
+  { x: 880, topY: 505, width: 140 },
+  { x: 1100, topY: 470, width: 160 },
+] as const;
+
 export class GameScene extends Phaser.Scene {
+  private player!: Player;
+  private inputManager!: InputManager;
+  private debugHud: DebugHud | null = null;
+  private respawnCount = 0;
+
   constructor() {
     super(SCENE_KEYS.GAME);
   }
 
   create(): void {
+    const playerConfig = requirePlayerConfig();
+
     this.cameras.main.setBackgroundColor(PALETTE.sky);
 
     this.drawBackdrop();
-    this.drawGround();
-    this.drawPlayerPlaceholder(420, GROUND_TOP);
+    const staticSurfaces = this.createArena();
+    this.drawSpawnMarker();
+    this.drawWorldBoundary();
+
+    // Left/right/top block movement; the bottom is intentionally open so the
+    // gap has a real consequence and the respawn check can run.
+    this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT, true, true, true, false);
+
+    this.player = new Player(this, SPAWN.x, SPAWN.y, playerConfig.movement);
+    this.physics.add.collider(this.player, staticSurfaces);
+
+    this.inputManager = new InputManager(this, {
+      enableResetKey: import.meta.env.DEV,
+      onFocusLost: () => this.player.cancelBufferedJump(),
+    });
+
     this.drawLabels();
+
+    if (import.meta.env.DEV) {
+      this.debugHud = new DebugHud(this);
+    }
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
+  }
+
+  override update(_time: number, delta: number): void {
+    this.inputManager.update();
+
+    const input = this.inputManager.getInputState();
+    this.player.tick(delta, input);
+
+    if (this.inputManager.consumeResetRequest() || this.player.y > RESPAWN_BELOW_Y) {
+      this.respawnPlayer();
+    }
+
+    this.debugHud?.update({
+      velocityX: this.player.velocityX,
+      velocityY: this.player.velocityY,
+      grounded: this.player.grounded,
+      visualState: this.player.visualState,
+      coyoteAvailable: this.player.coyoteAvailable,
+      jumpBuffered: this.player.jumpBuffered,
+      moveX: input.moveX,
+      respawns: this.respawnCount,
+    });
+  }
+
+  private respawnPlayer(): void {
+    this.player.respawnAt(SPAWN.x, SPAWN.y);
+    this.respawnCount += 1;
+  }
+
+  private handleShutdown(): void {
+    this.inputManager.destroy();
+    this.debugHud = null;
+  }
+
+  private createArena(): Phaser.GameObjects.Rectangle[] {
+    const solids: Phaser.GameObjects.Rectangle[] = [];
+
+    // Dark pit behind the gap, drawn first so the missing ground reads clearly.
+    const gapStart = GROUND_SEGMENTS[0].x + GROUND_SEGMENTS[0].width;
+    const gapWidth = GROUND_SEGMENTS[1].x - gapStart;
+
+    this.add
+      .rectangle(gapStart + gapWidth / 2, GROUND_TOP + GROUND_HEIGHT / 2, gapWidth, GROUND_HEIGHT, 0x1a2634)
+      .setDepth(0);
+
+    for (const segment of GROUND_SEGMENTS) {
+      const centerX = segment.x + segment.width / 2;
+
+      const ground = this.add
+        .rectangle(centerX, GROUND_TOP + GROUND_HEIGHT / 2, segment.width, GROUND_HEIGHT, PALETTE.soil)
+        .setStrokeStyle(4, PALETTE.ink);
+      this.physics.add.existing(ground, true);
+      solids.push(ground);
+
+      // Grass cap and seam line are purely visual; the body stays rectangular.
+      this.add.rectangle(centerX, GROUND_TOP + 11, segment.width, 22, PALETTE.grass).setDepth(1);
+      this.add.rectangle(centerX, GROUND_TOP + 25, segment.width, 6, PALETTE.grassDark).setDepth(1);
+    }
+
+    for (const platform of PLATFORMS) {
+      const centerX = platform.x + platform.width / 2;
+
+      const body = this.add
+        .rectangle(
+          centerX,
+          platform.topY + PLATFORM_HEIGHT / 2,
+          platform.width,
+          PLATFORM_HEIGHT,
+          PALETTE.soilDark,
+        )
+        .setStrokeStyle(4, PALETTE.ink);
+      this.physics.add.existing(body, true);
+      solids.push(body);
+
+      this.add
+        .rectangle(centerX, platform.topY + 4, platform.width, 8, PALETTE.grass)
+        .setDepth(1);
+    }
+
+    this.drawGroundSeams();
+
+    return solids;
+  }
+
+  private drawGroundSeams(): void {
+    const seams = this.add.graphics().setDepth(1);
+
+    seams.lineStyle(2, PALETTE.soilDark, 0.5);
+
+    for (let x = DEFAULT_TILE_SIZE; x < GAME_WIDTH; x += DEFAULT_TILE_SIZE) {
+      const inGap = x > GROUND_SEGMENTS[0].width && x < GROUND_SEGMENTS[1].x;
+
+      if (inGap) {
+        continue;
+      }
+
+      seams.beginPath();
+      seams.moveTo(x, GROUND_TOP + 32);
+      seams.lineTo(x, GAME_HEIGHT);
+      seams.strokePath();
+    }
+  }
+
+  private drawSpawnMarker(): void {
+    const marker = this.add.graphics().setDepth(-1);
+
+    marker.fillStyle(PALETTE.accent, 0.4);
+    marker.fillEllipse(SPAWN.x, GROUND_TOP - 5, 88, 20);
+    marker.lineStyle(3, PALETTE.accentDark, 0.8);
+    marker.strokeEllipse(SPAWN.x, GROUND_TOP - 5, 88, 20);
+
+    addUiText(this, SPAWN.x, GROUND_TOP - 118, 'SPAWN', {
+      fontStyle: 'bold',
+      fontSize: '14px',
+      color: toCssColor(PALETTE.accentDark),
+    }).setOrigin(0.5, 1);
+  }
+
+  private drawWorldBoundary(): void {
+    const boundary = this.add.graphics().setDepth(5);
+
+    boundary.lineStyle(3, PALETTE.ink, 0.3);
+    boundary.strokeRect(2, 2, GAME_WIDTH - 4, GAME_HEIGHT - 4);
   }
 
   private drawBackdrop(): void {
@@ -53,102 +226,31 @@ export class GameScene extends Phaser.Scene {
     graphics.fillEllipse(720, GAME_HEIGHT + 30, 900, 280);
   }
 
-  private drawGround(): void {
-    const graphics = this.add.graphics();
-    const groundHeight = GAME_HEIGHT - GROUND_TOP;
-
-    graphics.fillStyle(PALETTE.soil, 1);
-    graphics.fillRect(0, GROUND_TOP, GAME_WIDTH, groundHeight);
-
-    graphics.fillStyle(PALETTE.grass, 1);
-    graphics.fillRect(0, GROUND_TOP, GAME_WIDTH, 24);
-
-    graphics.fillStyle(PALETTE.grassDark, 1);
-    graphics.fillRect(0, GROUND_TOP + 24, GAME_WIDTH, 8);
-
-    // Subtle 64px tile seams: a visual reminder of the level grid contract.
-    graphics.lineStyle(2, PALETTE.soilDark, 0.5);
-    for (let x = DEFAULT_TILE_SIZE; x < GAME_WIDTH; x += DEFAULT_TILE_SIZE) {
-      graphics.beginPath();
-      graphics.moveTo(x, GROUND_TOP + 32);
-      graphics.lineTo(x, GAME_HEIGHT);
-      graphics.strokePath();
-    }
-
-    for (let y = GROUND_TOP + DEFAULT_TILE_SIZE; y < GAME_HEIGHT; y += DEFAULT_TILE_SIZE) {
-      graphics.beginPath();
-      graphics.moveTo(0, y);
-      graphics.lineTo(GAME_WIDTH, y);
-      graphics.strokePath();
-    }
-  }
-
-  /**
-   * Placeholder character drawn from shapes. The container is anchored at the
-   * character's feet, which is the convention future physics bodies will use.
-   */
-  private drawPlayerPlaceholder(x: number, feetY: number): void {
-    const player = this.add.container(x, feetY);
-    const graphics = this.add.graphics();
-
-    // Contact shadow.
-    graphics.fillStyle(PALETTE.ink, 0.18);
-    graphics.fillEllipse(0, -2, 96, 22);
-
-    // Feet.
-    graphics.fillStyle(PALETTE.ink, 1);
-    graphics.fillRoundedRect(-30, -20, 26, 20, 9);
-    graphics.fillRoundedRect(4, -20, 26, 20, 9);
-
-    // Body and arms.
-    graphics.fillStyle(PALETTE.playerDark, 1);
-    graphics.fillRoundedRect(-36, -92, 72, 76, 22);
-    graphics.fillStyle(PALETTE.player, 1);
-    graphics.fillRoundedRect(-31, -95, 62, 70, 20);
-
-    graphics.fillStyle(PALETTE.playerDark, 1);
-    graphics.fillRoundedRect(-48, -78, 18, 34, 9);
-    graphics.fillRoundedRect(30, -78, 18, 34, 9);
-
-    // Head with cartoon outline.
-    graphics.fillStyle(PALETTE.ink, 1);
-    graphics.fillCircle(0, -124, 38);
-    graphics.fillStyle(0xffd7b0, 1);
-    graphics.fillCircle(0, -126, 32);
-
-    // Face.
-    graphics.fillStyle(PALETTE.ink, 1);
-    graphics.fillCircle(-11, -130, 4.5);
-    graphics.fillCircle(11, -130, 4.5);
-    graphics.lineStyle(3.5, PALETTE.ink, 1);
-    graphics.beginPath();
-    graphics.arc(0, -120, 11, 0.2 * Math.PI, 0.8 * Math.PI);
-    graphics.strokePath();
-
-    // Cheek highlight.
-    graphics.fillStyle(PALETTE.white, 0.35);
-    graphics.fillEllipse(-22, -140, 12, 16);
-
-    player.add(graphics);
-  }
-
   private drawLabels(): void {
-    addUiText(this, 48, 40, 'DEVELOPMENT PLAYGROUND', {
+    addUiText(this, 40, 26, 'MOVEMENT PLAYGROUND', {
       fontStyle: 'bold',
-      fontSize: '34px',
+      fontSize: '30px',
       color: toCssColor(PALETTE.white),
       stroke: toCssColor(PALETTE.ink),
-      strokeThickness: 9,
+      strokeThickness: 8,
+    });
+
+    addUiText(this, 42, 68, 'Task 002 · Arcade Physics · temporary test arena', {
+      fontStyle: 'bold',
+      fontSize: '18px',
+      color: toCssColor(PALETTE.inkSoft),
     });
 
     addUiText(
       this,
-      50,
-      88,
-      'Task 001 placeholder · player movement and physics arrive in Task 002',
+      42,
+      94,
+      import.meta.env.DEV
+        ? 'MOVE: LEFT/RIGHT or A/D   ·   JUMP: SPACE or W/UP   ·   RESET: R (dev)'
+        : 'MOVE: LEFT/RIGHT or A/D   ·   JUMP: SPACE or W/UP',
       {
         fontStyle: 'bold',
-        fontSize: '20px',
+        fontSize: '17px',
         color: toCssColor(PALETTE.inkSoft),
       },
     );
