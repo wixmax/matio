@@ -10,9 +10,10 @@ time; adding a valid file is enough to register a playable level.
 - Phaser construction: `src/systems/LevelLoader.ts` + `src/factories/`
 - Default level / dev selector: `src/core/level-config.ts`
 
-Status: schema 1 is implemented end-to-end (discovery, validation, terrain, colliders, goal marker,
-camera, respawn, error view). Object definitions are validated but intentionally not instantiated
-yet.
+Status: schema 1 is implemented end-to-end (discovery, validation, terrain, colliders, collectibles,
+goal completion, camera, respawn, scoring/rating, progression, save and error view). `coin` and
+`star` objects are instantiated; `bomb`, `shield` and `magnet` are validated but intentionally not
+implemented.
 
 ## 1. Coordinate system and anchors
 
@@ -25,6 +26,7 @@ yet.
 | Default tile size | **64 px** (`DEFAULT_TILE_SIZE`) |
 | Terrain anchor | **Top-left tile** of the area |
 | Spawn/goal anchor | **Bottom-center of the named cell** |
+| Collectible anchor | **Center of the named cell** |
 | Runtime movement units | Pixels per second (px/s), px/s² for gravity |
 
 Conversion:
@@ -33,12 +35,16 @@ Conversion:
 terrain pixel rect = (x * tileSize, y * tileSize, width * tileSize, height * tileSize)
 
 spawn/goal pixel = (x * tileSize + tileSize / 2, (y + 1) * tileSize)
+
+collectible pixel = ((x + 0.5) * tileSize, (y + 0.5) * tileSize)
 ```
 
 The spawn/goal cell names the cell that contains the entity's feet (or flag base). A spawn at
 `{ "x": 5, "y": 12 }` on a ground row beginning at tile 13 produces feet at
 `x = 5 * 64 + 32 = 352`, `y = (12 + 1) * 64 = 832`. The player is never offset by body or sprite
 dimensions on top of this conversion.
+
+A collectible at `{ "x": 6, "y": 11 }` with tile size 64 is centered at `(416, 736)`.
 
 **Authoring rule:** place spawn/goal in an empty cell directly above solid terrain. A spawn cell
 inside solid terrain is rejected by the loader with an `unsafe-spawn` error before any terrain is
@@ -65,15 +71,16 @@ loading without changing the JSON contract.
 
 Shipped levels:
 
-| ID | File | Name | Size (tiles) |
-| --- | --- | --- | --- |
-| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 |
-| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 |
-| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 |
+| ID | File | Name | Size (tiles) | Coins | Stars | Unimplemented |
+| --- | --- | --- | --- | --- | --- | --- |
+| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | bomb, shield |
+| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | — |
+| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | — |
 
 The **default level** is `world-01-level-01` (`DEFAULT_LEVEL_ID`).
 
-Development selector (ignored in production builds):
+Development selector (ignored in production builds, and it takes priority over menu selection in
+development):
 
 ```text
 http://localhost:5173/?level=world-01-level-02
@@ -126,14 +133,28 @@ Each area becomes **one** visual rectangle and, for solid types, **one** static 
 placeholder renderer adds a few decorative strips without physics. Tile-by-tile bodies are avoided
 for performance.
 
-## 5. Object policy (temporary)
+## 5. Object behavior
 
 The schema accepts `coin`, `star`, `bomb`, `shield` and `magnet` objects with optional unique IDs.
-They are validated normally, but in Task 003 they are **not created**. The loader logs a development
-diagnostic with the ignored count/types. This allows future-compatible levels to load without
-crashing and without converting objects into unrelated gameplay.
 
-Spawn positions must not overlap solid terrain. The loader checks the spawn cell as a safety guard.
+| Type | Implemented | Behavior |
+| --- | --- | --- |
+| `coin` | **yes** | Non-solid pickup, 100 points, counter/HUD update |
+| `star` | **yes** | Non-solid pickup, 500 points, stronger feedback |
+| `bomb` | no | Valid content, preserved, never instantiated, no score |
+| `shield` | no | Valid content, preserved, never instantiated, no score |
+| `magnet` | no | Valid content, preserved, never instantiated, no score |
+
+Rules:
+
+- Placement is the **center** of the cell; use empty cells and prefer cells above a reachable
+  platform or ground.
+- A collectible must never be authored inside solid terrain. A content test enforces this for every
+  shipped level.
+- Collection is idempotent per run. Collected objects stay collected after a fall; Retry creates a
+  fresh attempt and restores them.
+- Spawn positions must not overlap solid terrain. The loader checks the spawn cell as a safety guard.
+- Unimplemented objects are logged in development with their counts and ignored at runtime.
 
 ## 6. Complete working example (level 01)
 
@@ -154,12 +175,17 @@ Spawn positions must not overlap solid terrain. The loader checks the spawn cell
     { "type": "block", "x": 24, "y": 12, "width": 1, "height": 1 },
     { "type": "platform", "x": 27, "y": 12, "width": 5, "height": 1 }
   ],
-  "objects": []
+  "objects": [
+    { "type": "coin", "x": 6, "y": 11 },
+    { "type": "coin", "x": 7, "y": 11 },
+    { "id": "star-01", "type": "star", "x": 9, "y": 10 },
+    { "type": "bomb", "x": 23, "y": 10 }
+  ]
 }
 ```
 
-The shipped level 01 additionally contains five legacy object entries to exercise the ignored-object
-policy; they do not appear in gameplay.
+The shipped level 01 contains 12 coins, 2 collectible stars and legacy `bomb`/`shield` entries. The
+legacy objects are preserved but not created; coins and stars use the same JSON shape.
 
 ## 7. Validation and loading errors
 
@@ -214,13 +240,16 @@ Rules still enforced by the validator:
 5. Add terrain rectangles inside the size bounds. Keep vertical steps within the jump arc
    (roughly 100–110 px / 1.5 tiles with current tuning) and gaps within a running jump
    (roughly 3 tiles / 192 px).
-6. Save, reload the dev server, and open:
+6. Add `coin`/`star` objects in empty cells after the path. Place at least one star on an optional
+   platform. `bomb`/`shield`/`magnet` remain valid but have no runtime effect.
+7. Add the new ID to `content/config/level-order.json` (see below) if it belongs to the campaign.
+8. Save, reload the dev server, and open:
 
    ```text
    http://localhost:5173/?level=world-01-level-04
    ```
 
-7. Run `npm run test`, `npm run typecheck` and `npm run build`. No scene, factory or loader code
+9. Run `npm run test`, `npm run typecheck` and `npm run build`. No scene, factory or loader code
    changes are required.
 
 Minimal example:
@@ -241,12 +270,44 @@ Minimal example:
     { "type": "block", "x": 12, "y": 10, "width": 1, "height": 1 },
     { "type": "platform", "x": 16, "y": 10, "width": 3, "height": 1 }
   ],
-  "objects": []
+  "objects": [
+    { "type": "coin", "x": 3, "y": 10 },
+    { "type": "coin", "x": 6, "y": 9 },
+    { "id": "star-01", "type": "star", "x": 7, "y": 8 }
+  ]
 }
 ```
 
 This level is 1536×768 px, wider and taller than the viewport. Spawn feet = `(160, 704)`; the ground
 top is also 704, so the player starts standing correctly.
+
+### 9.1 Campaign order (`content/config/level-order.json`)
+
+```json
+{
+  "schemaVersion": 1,
+  "levels": [
+    "world-01-level-01",
+    "world-01-level-02",
+    "world-01-level-03"
+  ]
+}
+```
+
+- Order is explicit and never inferred from file discovery.
+- IDs must be unique and reference existing levels; startup blocks with an error otherwise.
+- The first ID starts unlocked. Completing a level unlocks the next one.
+- The final level has no next level; the result screen then offers only Retry/Main Menu.
+- The development `?level=` selector can open locked levels; it is ignored in production.
+
+### 9.2 Scoring, rating and save configuration
+
+- `content/config/scoring.json` holds coin/star/completion points and the 2-star coin ratio.
+- `content/config/level-order.json` holds the campaign order.
+- `matio.save.v1` in localStorage holds a versioned save. Menu displays unlocked levels and best
+  ratings; GameScene/ResultScene read the same validated store.
+- A level with zero coins or zero collectible stars cannot receive the corresponding higher rating
+  threshold; empty levels award only 1 star on completion.
 
 ## 10. Evolution policy
 

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "points": {
+    "coin": 100,
+    "star": 500,
+    "levelComplete": 1000
+  },
+  "rating": {
+    "twoStarMinCoinRatio": 0.7
+  }
+}

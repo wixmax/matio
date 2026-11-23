@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH } from '../../core/constants';
 import type { MoveDirection, PlayerVisualState } from '../../types/player';
 import { PALETTE, toCssColor } from '../theme';
 import { addUiText } from './ui-text';
@@ -17,6 +16,12 @@ export interface DebugHudState {
   readonly jumpBuffered: boolean;
   readonly moveX: MoveDirection;
   readonly respawns: number;
+  readonly coins: number;
+  readonly totalCoins: number;
+  readonly stars: number;
+  readonly totalStars: number;
+  readonly score: number;
+  readonly gameplayState: string;
 }
 
 /**
@@ -28,7 +33,7 @@ export class DebugHud {
   private lastRendered = '';
 
   constructor(scene: Phaser.Scene) {
-    this.text = addUiText(scene, GAME_WIDTH - 22, 18, '', {
+    this.text = addUiText(scene, 24, 108, '', {
       fontFamily: 'Consolas, "Courier New", monospace',
       fontSize: '15px',
       color: toCssColor(PALETTE.mutedText),
@@ -36,7 +41,7 @@ export class DebugHud {
       padding: { left: 10, right: 10, top: 8, bottom: 8 },
       lineSpacing: 3,
     })
-      .setOrigin(1, 0)
+      .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(2000)
       .setAlpha(0.86);
@@ -52,6 +57,8 @@ export class DebugHud {
       `state ${state.visualState}   grounded ${state.grounded ? 'yes' : 'no'}`,
       `coyote ${state.coyoteAvailable ? 'yes' : 'no'}   buffer ${state.jumpBuffered ? 'yes' : 'no'}`,
       `input ${formatSigned(state.moveX)}   respawns ${state.respawns}`,
+      `coins ${state.coins}/${state.totalCoins}   stars ${state.stars}/${state.totalStars}`,
+      `score ${state.score}   state ${state.gameplayState}`,
     ].join('\n');
 
     if (rendered !== this.lastRendered) {

@@ -83,7 +83,9 @@ describe('LevelRepository - bundled levels', () => {
       expect(result.value.tileSize).toBe(64);
       expect(result.value.size).toEqual({ width: 40, height: 15 });
       expect(result.value.terrain).toHaveLength(5);
-      expect(result.value.objects).toHaveLength(5);
+      expect(result.value.objects.filter((object) => object.type === 'coin').length).toBeGreaterThan(0);
+      expect(result.value.objects.filter((object) => object.type === 'star').length).toBeGreaterThan(0);
+      expect(result.value.objects.some((object) => object.type === 'bomb')).toBe(true);
     }
   });
 

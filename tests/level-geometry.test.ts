@@ -3,11 +3,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   cellBottomCenter,
+  cellCenter,
   computeCameraFrame,
+  createCollectiblePlacements,
   createLevelGeometry,
   findSolidTerrainAtCell,
   isSolidTerrainType,
-  summarizeIgnoredObjects,
+  summarizeUnimplementedObjects,
   tileRectToPixel,
 } from '../src/systems/level-geometry';
 import { parseLevelJson } from '../src/systems/level-validator';
@@ -53,6 +55,11 @@ describe('level geometry - coordinates', () => {
     expect(cellBottomCenter({ x: 0, y: 0 }, 32)).toEqual({ x: 16, y: 32 });
   });
 
+  it('uses the cell center for collectible anchors', () => {
+    expect(cellCenter({ x: 2, y: 12 }, 64)).toEqual({ x: 160, y: 800 });
+    expect(cellCenter({ x: 0, y: 0 }, 32)).toEqual({ x: 16, y: 16 });
+  });
+
   it('derives world dimensions, spawn, goal and rectangle sizes', () => {
     const geometry = createLevelGeometry(createTestLevel());
 
@@ -67,6 +74,13 @@ describe('level geometry - coordinates', () => {
       rect: { x: 0, y: 320, width: 640, height: 64 },
     });
     expect(geometry.terrain[1]?.solid).toBe(false);
+    expect(geometry.collectibleTotals).toEqual({ coins: 2, stars: 1 });
+    expect(geometry.collectibles[0]).toEqual({
+      key: 'coin:0',
+      type: 'coin',
+      x: 224,
+      y: 224,
+    });
   });
 
   it('aligns the shipped level 01 spawn with the top of its ground', () => {
@@ -113,11 +127,35 @@ describe('level geometry - terrain classification', () => {
     expect(findSolidTerrainAtCell(waterOnly, { x: 3, y: 5 })).toBeNull();
   });
 
-  it('summarizes ignored future objects without converting them', () => {
-    const summary = summarizeIgnoredObjects(createTestLevel());
+  it('summarizes only unimplemented future objects', () => {
+    const level = createTestLevel();
+    const summary = summarizeUnimplementedObjects({
+      ...level,
+      objects: [
+        ...level.objects,
+        { type: 'bomb', x: 6, y: 3 },
+        { id: 'shield-01', type: 'shield', x: 7, y: 3 },
+        { type: 'magnet', x: 8, y: 3 },
+      ],
+    });
 
     expect(summary.total).toBe(3);
-    expect(summary.byType).toEqual({ coin: 2, star: 1 });
+    expect(summary.byType).toEqual({ bomb: 1, shield: 1, magnet: 1 });
+  });
+
+  it('builds deterministic placements for coins and stars only', () => {
+    const level = createTestLevel();
+    const placements = createCollectiblePlacements({
+      ...level,
+      objects: [...level.objects, { type: 'bomb', x: 6, y: 3 }],
+    });
+
+    expect(placements).toEqual([
+      { key: 'coin:0', type: 'coin', x: 224, y: 224 },
+      { key: 'coin:1', type: 'coin', x: 288, y: 224 },
+      { key: 'star:2', type: 'star', x: 352, y: 160 },
+    ]);
+    expect(createCollectiblePlacements(level)).toEqual(placements);
   });
 });
 

@@ -8,6 +8,9 @@ export interface TextButtonOptions {
   width?: number;
   height?: number;
   fontSize?: number;
+  /** Optional second line (level select status, hints). */
+  subtitle?: string;
+  subtitleFontSize?: number;
 }
 
 type ButtonState = 'idle' | 'hover' | 'pressed';
@@ -27,9 +30,11 @@ const CORNER_RADIUS = 22;
 export class TextButton extends Phaser.GameObjects.Container {
   private readonly background: Phaser.GameObjects.Graphics;
   private readonly labelText: Phaser.GameObjects.Text;
+  private readonly subtitleText: Phaser.GameObjects.Text | null;
   private readonly buttonWidth: number;
   private readonly buttonHeight: number;
   private readonly onClick: () => void;
+  private readonly labelBaseY: number;
 
   private enabled = true;
   private pressed = false;
@@ -42,17 +47,32 @@ export class TextButton extends Phaser.GameObjects.Container {
     this.buttonWidth = options.width ?? DEFAULT_WIDTH;
     this.buttonHeight = options.height ?? DEFAULT_HEIGHT;
     this.onClick = options.onClick;
+    this.labelBaseY = options.subtitle === undefined ? 0 : -13;
 
     this.background = scene.add.graphics();
-    this.labelText = addUiText(scene, 0, 0, options.label, {
+    this.labelText = addUiText(scene, 0, this.labelBaseY, options.label, {
       fontStyle: 'bold',
       fontSize: `${options.fontSize ?? DEFAULT_FONT_SIZE}px`,
       color: toCssColor(PALETTE.white),
       stroke: toCssColor(PALETTE.ink),
       strokeThickness: 6,
+      align: 'center',
     }).setOrigin(0.5);
 
+    this.subtitleText =
+      options.subtitle === undefined
+        ? null
+        : addUiText(scene, 0, 18, options.subtitle, {
+            fontStyle: 'bold',
+            fontSize: `${options.subtitleFontSize ?? 16}px`,
+            color: toCssColor(PALETTE.mutedText),
+          }).setOrigin(0.5);
+
     this.add([this.background, this.labelText]);
+
+    if (this.subtitleText !== null) {
+      this.add(this.subtitleText);
+    }
     this.setSize(this.buttonWidth, this.buttonHeight);
 
     this.bindPointerEvents();
@@ -167,6 +187,6 @@ export class TextButton extends Phaser.GameObjects.Container {
     this.background.lineStyle(6, PALETTE.ink, 1);
     this.background.strokeRoundedRect(-halfWidth, -halfHeight, this.buttonWidth, this.buttonHeight, CORNER_RADIUS);
 
-    this.labelText.setY(this.visualState === 'pressed' ? 3 : 0);
+    this.labelText.setY(this.labelBaseY + (this.visualState === 'pressed' ? 3 : 0));
   }
 }

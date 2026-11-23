@@ -17,6 +17,8 @@
 4. Write down the acceptance criteria implied by the task, including what is out of scope.
 5. Check Phaser 4 APIs before using them: `node_modules/phaser/types/phaser.d.ts` or
    `node_modules/phaser/skills/<topic>/SKILL.md`. Do not copy Phaser 3 code from memory.
+6. For gameplay changes, identify the config/content involved: `player.json`, `scoring.json`,
+   `level-order.json`, level JSON and the save schema are validated content, not inline constants.
 
 ## 3. Implementation loop
 
@@ -96,6 +98,9 @@ instead of changing the port, so review instructions remain stable.
 - Environment: Node (no DOM). Test pure modules and validators, not Phaser internals.
 - Cover the happy path, defaults, boundary values, invalid input and multiple-error behavior.
 - Use the real example content where it strengthens the test (the shipped level is validated).
+- Keep scoring, rating, progression and save rules engine-free so they are tested without Phaser.
+- Use injected storage (`SaveStorage`) for save tests instead of mocking the whole browser.
+- For collectible content, assert that no coin/star cell overlaps solid terrain.
 
 ### Manual browser verification
 
@@ -133,6 +138,23 @@ For level/camera work:
 8. Load an unknown ID and confirm the error panel lists available levels and BACK TO MENU works.
 9. Restart the scene repeatedly and compare static/dynamic body counts and text/listener counts.
 
+For collectible/progression/save work:
+
+1. Confirm coins and collectible stars render at JSON cell centers and inside no solid terrain.
+2. Collect one coin and one star; check HUD counts/score change once and objects disappear.
+3. Overlap the same object repeatedly (deterministic frames are acceptable) and confirm no duplicate
+   reward.
+4. Fall into a gap/respawn and confirm collected objects and run score are preserved.
+5. Reach the goal and confirm the result counts/score/rating are correct and settlement happened
+   once (inspect the save and repeat the overlap).
+6. Use RETRY and confirm all collectibles return with counters at zero.
+7. Replay a level worse than the record and confirm the saved best does not shrink.
+8. Return to the menu, refresh the page and confirm best records/unlocks persist.
+9. Try a locked level through normal UI (must be rejected) and via `?level=` in development (must
+   bypass).
+10. Clear corrupt/unsupported `localStorage` values and confirm a diagnostic plus safe recovery; do
+    not lose an unsupported-version save.
+
 Report what was actually observed. "Should work" is not verification. If a check could not run in
 the environment, say so explicitly. Synthetic touch events are not a substitute for claiming
 real-device testing.
@@ -143,13 +165,18 @@ real-device testing.
   `src/core/level-repository.ts`.
 - Use the existing schema; never duplicate validation rules or add a second level format.
 - Place spawn/goal in empty cells directly above solid terrain (bottom-center anchor).
+- Place coins/stars in empty cells (center anchor) above reachable ground/platforms; never inside
+  solid terrain.
 - Keep rectangles within bounds; one static body per solid area.
 - Prefer reachable geometry (steps ≤ ~100 px, gaps ≤ ~3 tiles with current tuning).
+- Add the level ID to `content/config/level-order.json` when it belongs to the campaign.
 - Test the level via `?level=<id>`, then run `npm run test`, `npm run typecheck`, `npm run build`.
 - Add a level without editing TypeScript. The practical tutorial lives in
   `docs/LEVEL_FORMAT.md#9-how-to-create-level-04json-without-modifying-typescript`.
 - Valid-but-unimplemented object entries must remain ignored with dev diagnostics; do not implement
-  collectibles as a side effect.
+  power-ups as a side effect.
+- Scoring values live in `content/config/scoring.json`; save schema changes require a migration and
+  tests.
 
 ## 7. Git conventions
 
@@ -175,6 +202,11 @@ Before handing off, confirm:
       real device or via synthetic events).
 - [ ] Input cleanup: restarting the scene does not duplicate keyboard/pointer listeners or captures.
 - [ ] Levels: all affected IDs load; spawn/terrain/goal/camera and gaps/water/error states verified.
+- [ ] Collectibles: JSON-driven, tile-center anchors, collected once, HUD/score updated once.
+- [ ] Respawn: collected objects/score preserved; Retry starts a fresh run with all collectibles.
+- [ ] Victory: result counts/score/rating correct; settlement runs once; next/final level handled.
+- [ ] Progression: explicit order, initial unlock, next unlock, replay allowed, locked rejected.
+- [ ] Save: versioned/validated, survives refresh, best records never shrink, corruption recovered.
 - [ ] Restart: static/dynamic body counts, text objects and listeners stay stable.
 - [ ] Content: no hardcoded level data; JSON (levels and player config) validated.
 - [ ] Console: no uncaught errors or warnings introduced.

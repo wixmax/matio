@@ -26,16 +26,18 @@ Phaser 4 specifics that matter:
 public/assets/            Static runtime art/audio (still empty)
 content/levels/           Source-of-truth JSON levels (auto-discovered)
 content/config/           Validated gameplay config (player.json)
-src/core/                 Composition root: game config, constants, level catalog, dev bridge
-src/scenes/               Boot, Menu, Game scenes (lifecycle/orchestration)
-src/entities/             Player entity and procedural placeholder textures
+src/core/                 Composition root: game config, constants, level catalog/order,
+                          scoring/save singletons, dev bridge
+src/scenes/               Boot, Menu, Game and Result scenes (lifecycle/orchestration)
+src/entities/             Player, Collectible and procedural placeholder textures
 src/systems/              Pure rules + Phaser-aware orchestration:
-                          validators, jump rules, geometry, LevelRepository, LevelLoader
-src/factories/            Phaser construction: terrain, backdrop, goal marker
+                          validators, scoring, progression, save, jump rules, geometry,
+                          LevelRepository, LevelLoader, CollectionSystem
+src/factories/            Phaser construction: terrain, backdrop, goal marker, collectibles
 src/input/                Unified keyboard/touch input and pure input resolution
-src/ui/components/        Reusable UI: text, button, header, debug/error panels
-src/ui/screens/           Future composed UI screens
-src/types/                Phaser-free contracts (level, runtime, player, config, validation)
+src/ui/components/        Reusable UI: text, button, HUD, header, debug/error panels
+src/ui/screens/           Future composed UI screens (pause, shop)
+src/types/                Phaser-free contracts (level, collectible, scoring, save, result, ...)
 src/utils/                Small helpers
 src/styles/               Global page CSS
 tests/                    Vitest suites and content checks
@@ -47,38 +49,44 @@ Import direction:
 
 ```text
 core -> scenes -> entities + input + ui + systems + factories + types
-systems/LevelLoader -> factories + systems + types   (Phaser-aware orchestration)
+systems/LevelLoader + CollectionSystem -> factories + entities + systems + types
+                                                      (Phaser-aware orchestration)
 systems (pure) -> types
 factories -> types + ui/theme + systems geometry
 ui/components -> theme + utils
 types -> (nothing, no Phaser)
 ```
 
-`types/` never imports Phaser. `LevelRepository`, `level-geometry`, validators and jump rules stay
-engine-free. `LevelLoader` and the factories are the only Phaser-heavy systems/factories.
+`types/` never imports Phaser. `LevelRepository`, `level-geometry`, validators, scoring, progression,
+save rules and jump rules stay engine-free. `LevelLoader`, `CollectionSystem` and the factories are
+the only Phaser-heavy systems/factories.
 
 ## 3. Scene lifecycle
 
 ```text
 Phaser boot
   └─ BootScene: init/preload/create -> MenuScene
-  └─ MenuScene: START GAME -> GameScene
+  └─ MenuScene: START GAME / level cards -> GameScene({ levelId })
   └─ GameScene
        create():
-         resolve level ID (dev ?level=, else DEFAULT_LEVEL_ID)
+         resolve level ID (?level= in dev, else scene data/default)
          getLevelRepository() -> getLevel(id)
-         loadLevel(scene, level) -> geometry + terrain + goal + backdrop
-         startPlayableLevel(level, geometry, solids)
+         reject locked IDs through normal navigation (dev selector bypasses)
+         loadLevel(scene, level) -> geometry + terrain + goal sensor + collectibles
+         startPlayableLevel(...)
          OR showLevelError(failure) and return
        update():
-         input -> player.tick -> fall/reset respawn -> debug HUD
+         input -> player.tick -> fall/respawn -> debug HUD
+       goal overlap:
+         playing -> completing -> settle score/save once -> ResultScene(data)
        shutdown:
-         destroy InputManager, stop camera follow, clear references
+         destroy CollectionSystem/InputManager, stop camera follow, clear references
+  └─ ResultScene: RETRY / NEXT LEVEL / MAIN MENU -> GameScene or MenuScene
 ```
 
-`scene.start()` stops the previous scene. A successful `GameScene` owns one Player, one InputManager,
-one collider and one camera follow target. An error state owns no gameplay systems and shows only a
-blocking error panel with BACK TO MENU.
+`scene.start()` stops the previous scene. A successful `GameScene` owns one Player, one
+InputManager, one CollectionSystem, one collider set and one camera follow target. An error state
+owns no gameplay systems and shows only a blocking error panel with BACK TO MENU.
 
 ## 4. Level architecture and data flow
 
@@ -97,12 +105,12 @@ core/level-repository  ──►  systems/LevelRepository
                             systems/LevelLoader
                      ┌────────────┼─────────────┐
                      ▼            ▼             ▼
-              BackdropFactory TerrainFactory GoalMarkerFactory
-                                  │
-                         solids[] (static Arcade rectangles)
-                                  │
-                         GameScene wiring: Player, collider,
-                         world bounds, camera, input, HUD
+              BackdropFactory TerrainFactory GoalMarkerFactory CollectibleFactory
+                                  |              | (visual+sensor)  | (group)
+                          solids[] (static)      |                  |
+                                  |              |                  |
+                          GameScene wiring: Player, colliders, overlaps,
+                          CollectionSystem, world bounds, camera, input, HUD
 ```
 
 ### LevelRepository (`src/systems/LevelRepository.ts`)
@@ -121,10 +129,11 @@ core/level-repository  ──►  systems/LevelRepository
 
 - Accepts a validated `LevelDefinition`.
 - Rejects a spawn cell that overlaps solid terrain (`unsafe-spawn`) before creating anything.
-- Builds geometry, backdrop, terrain and goal marker.
-- Returns `LevelRuntime` with geometry, solid bodies, goal marker, backdrop and ignored-object report.
-- Does not create the player, input, camera or collider.
-- Logs ignored object counts in development.
+- Builds geometry, backdrop, terrain, goal marker/sensor and coin/star instances.
+- Returns `LevelRuntime` with geometry, solid bodies, goal runtime, collectibles, backdrop and the
+  unimplemented-object report.
+- Does not create the player, input, camera, HUD, colliders or overlaps.
+- Logs ignored `bomb`/`shield`/`magnet` objects and collectible totals in development.
 
 ### TerrainFactory (`src/factories/TerrainFactory.ts`)
 
@@ -133,6 +142,13 @@ core/level-repository  ──►  systems/LevelRepository
 - `water` has no body and is purely visual.
 - Adds grass caps/blocks details without altering collision geometry.
 - No per-tile bodies; no per-frame updates.
+
+### CollectibleFactory (`src/factories/CollectibleFactory.ts`)
+
+- One `Collectible` sprite per validated coin/star placement.
+- One Arcade group for a single player/collectibles overlap.
+- Bodies have gravity disabled and are immovable: pickup only, never a blocking obstacle.
+- Procedural textures live in `entities/collectible-textures.ts` and can be replaced by an atlas.
 
 ### GameScene
 
@@ -222,11 +238,16 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
 ## 11. UI, debug and errors
 
 - `LevelHeader` shows level name/ID/size and controls, fixed to the camera.
-- `DebugHud` (dev only) shows level, scroll, velocity, grounded/visual/coyote/buffer, input, respawns.
+- `GameHud` (production + dev) shows level name, coin/star counters and collected points. It is
+  camera-fixed (`scrollFactor(0)`) and only rewrites text when a counter changes.
+- `ResultScene` is a separate scene fed with plain data: counts, score, rating, best records and next
+  level. RETRY/NEXT LEVEL/MAIN MENU use `TextButton` (shared mouse/touch path) and a local transition
+  guard.
+- `DebugHud` (dev only) adds scroll, velocity, grounded/visual/coyote/buffer, input, respawns,
+  collectible counts, score and gameplay state.
 - `LevelErrorPanel` is a blocking screen with the requested ID, error code, message, field paths and
-  BACK TO MENU. It is used for unknown/invalid/duplicate/unsafe/load failures.
-- All text uses the DPR-aware text factory. Theme colors live in `ui/theme.ts`; placeholder stone and
-  water colors were added.
+  BACK TO MENU. It is used for unknown/invalid/duplicate/unsafe/locked/load failures.
+- All text uses the DPR-aware text factory. Theme colors live in `ui/theme.ts`.
 - Loading errors are logged to console and displayed; no uncaught promise rejections exist because
   discovery is synchronous.
 
@@ -234,23 +255,70 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
 
 - Phaser destroys display-list objects, physics bodies and colliders on scene shutdown; the scene does
   not manually destroy them (avoids double destruction).
-- `GameScene.handleShutdown` destroys `InputManager`, guards camera teardown order
-  (`this.cameras?.main?.stopFollow()`), and clears its own references.
+- `GameScene.handleShutdown` destroys `CollectionSystem`, the goal overlap collider and
+  `InputManager`, guards camera teardown order (`this.cameras?.main?.stopFollow()`), and clears its
+  own references.
 - The loader is synchronous, so a late async result cannot mutate a dead scene.
-- Verified: three consecutive restarts keep 5 static bodies, 1 dynamic body, 1 collider listener set,
-  8 key objects, 4 text objects and the JSON spawn/camera bounds unchanged.
+- Retry starts a new GameScene, which creates a fresh run ledger and new collectible instances. No
+  run state is carried through the Phaser scene registry.
+- Verified: restarts do not duplicate bodies/listeners; collected objects and save records behave as
+  documented.
 
 ## 13. Testing
 
-- 7 Vitest files, 71 tests: level validation (existing 16), player config, input resolution, jump
-  controller, level geometry/camera frame, level repository, level selector.
-- Repository tests read all shipped levels from `content/levels` and assert uniqueness/validity.
-  They do not assert an exact level count, so adding a valid level-04 does not break tests.
-- Phaser construction and camera/input are verified in a real browser; Phaser is not mocked.
+- 17 Vitest files, 156 tests: level validation, player config, input resolution, jump controller,
+  level geometry/camera frame, collectible geometry/content, collection ledger, scoring/rating,
+  scoring config, level order/progression, level launch policy, save validation/progress/store,
+  gameplay state, level repository and level selector.
+- Repository/content tests read all shipped levels and assert validity, unique IDs and that no
+  collectible is authored inside solid terrain.
+- Phaser construction, camera/input, collection overlap, victory and save persistence are verified in
+  a real browser; Phaser is not mocked.
 - Background/occluded Chromium tabs throttle `requestAnimationFrame`, so deterministic browser checks
   stop `game.loop` and call `game.step(time, 16.666)` manually. This is test instrumentation only.
 
-## 14. Android / Capacitor considerations
+## 14. Collectibles and collection safety
+
+- Coin/star JSON `{x,y}` cells are converted to **cell centers**; spawn/goal stay bottom-center.
+- Keys are derived deterministically from the validated object index (`coin:0`, `star:3`, ...).
+- `Collectible.collect()` is the entity-level idempotency guard: it disables the Arcade body
+  immediately and delays destruction until the feedback tween finishes.
+- `CollectionLedger` is the run-level guard: only the first collection of a key changes counters,
+  score or HUD. Overlap can fire repeatedly without duplicate rewards.
+- `CollectionSystem` owns one player/group overlap, collection feedback (floating points, larger
+  star ring) and `freeze()` for victory.
+- Respawn keeps the ledger and already-collected objects. Retry creates a new scene/ledger.
+
+## 15. Score, rating and victory settlement
+
+- `content/config/scoring.json` is validated by `validateScoringConfig()` at startup:
+  coin 100, collectible star 500, completion 1000, 2-star coin ratio 0.7.
+- `computeRunScore()` and `computeRatingStars()` are pure and Phaser-free. The HUD shows collected
+  points without the completion bonus; the result uses the final score including the bonus.
+- Rating (1..3) is separate from collectible stars. 3 stars requires non-empty coin AND collectible
+  star sets and collection of all of them; 2 stars requires the configured coin ratio; otherwise 1.
+  Empty levels cannot receive a perfect rating by vacuous truth.
+- The goal marker gains a non-solid static sensor zone. Goal overlap flips the scene state to
+  `completing` synchronously, destroys gameplay input, freezes collection, computes score/rating,
+  updates the save once and starts `ResultScene` with plain data.
+
+## 16. Progression and save data
+
+- `content/config/level-order.json` is the only campaign order. It is structurally validated and
+  cross-checked against discovered level IDs at startup.
+- First launch unlocks only the first configured level. Completion unlocks the next level in order;
+  the final level has no next. Replaying completed levels is allowed.
+- Normal navigation checks unlocks in the menu and again in GameScene. The development `?level=`
+  selector is the only bypass and is ignored in production.
+- `SaveStore` (localStorage adapter + in-memory fallback) stores `saveVersion: 1`,
+  `unlockedLevelIds` and per-level best records. Every load is validated; corrupt/invalid data
+  recovers to first-launch data with a diagnostic.
+- Unsupported versions are never overwritten (a newer build may own them); the session reports that
+  progress cannot be saved.
+- Best records are monotonic (`Math.max` per field). Settlement is idempotent. No wallet/currency is
+  implemented in this milestone.
+
+## 17. Android / Capacitor considerations
 
 - `base: './'` build works from a WebView/file origin.
 - Levels and player config are bundled; no server or Node APIs at runtime.
@@ -258,7 +326,7 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
 - Camera zoom stays 1 to keep touch hit-testing assumptions valid.
 - WebAudio still needs a first user gesture; START GAME is the natural unlock.
 
-## 15. Decision log
+## 18. Decision log
 
 | Decision | Reason |
 | --- | --- |
@@ -268,24 +336,37 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
 | Spawn/goal = bottom-center of cell | Matches feet-origin player and flag base; avoids tile offset bugs |
 | One body per terrain rectangle | Efficient; no hundreds of tile bodies |
 | Water non-solid | No swimming/damage in this milestone |
-| Ignore valid objects with dev diagnostics | Keeps future content loadable without implementing collectibles |
+| Ignore valid future objects with dev diagnostics | Keeps future content loadable without implementing power-ups |
+| Collectibles use cell centers | Art sits inside the authored tile while the player keeps its feet anchor |
+| Entity flag + run ledger for collection | Overlap callbacks can repeat; score/HUD must change once |
+| Respawn keeps collection, Retry resets it | Matches the "attempt" model without penalizing a fall |
+| Separate scoring/rating modules | Deterministic pure rules, testable without Phaser |
+| 3 stars requires non-empty collectible sets | Empty levels must not receive an accidental perfect rating |
+| Goal uses a non-solid sensor zone | Reaching the flag never becomes a physical obstacle |
+| Explicit `level-order.json` | Filesystem order is not gameplay design |
+| Versioned, validated localStorage save | Safe first launch, corruption recovery and future migration |
+| Never overwrite an unsupported save version | Protects progress written by a newer build |
+| Best records use per-field `Math.max` | A weaker replay never destroys a better record |
+| No persistent wallet in Task 004 | Avoids unrun replay-farming rules and shop coupling |
 | Camera lerp 0.1, zoom 1 | Gentle follow; keeps touch hit-testing simple |
 | Pad camera bounds for small levels | Centers small worlds instead of top-left pinning |
 | Fall margin 2 tiles | Explicit level-relative value, not a screen constant |
 | Keep gameplay systems out of error state | No partial invalid world |
 | Dev query selector only in dev | No user-facing level menu yet; production is deterministic |
 
-## 16. Known risks
+## 19. Known risks
 
 1. Phaser 4 is young; verify APIs against bundled types/skills.
 2. Canvas fallback was not exercised.
 3. DPR > 1 visual sharpness is unverified.
-4. Touch was verified with synthetic events, not physical devices.
-5. Gameplay input was verified in dev; production smoke test verifies loading/rendering/transition
-   but not movement because the dev bridge is intentionally absent.
+4. Touch was verified with synthetic events and UI event emission, not physical devices.
+5. Production preview loads and starts through a real browser click; the full production playthrough
+   and production save write were not replayed because the dev bridge is intentionally absent.
 6. Level content is bundled; no runtime level editing/hot reload beyond Vite.
 7. Camera zoom is fixed at 1; `TouchControlButton.isPointerWithin` assumes zoom 1.
-8. Object definitions are ignored until collectible systems arrive.
-9. Level design is placeholder and not tuned by a level designer; reachability was spot-checked,
-   not exhaustively play-tested.
+8. Bomb/shield/magnet object definitions remain valid but unimplemented.
+9. Level design is placeholder and not tuned by a designer; collectible reachability was checked
+   against the jump arc and solid-cell validation, not exhaustively played on a device.
 10. Eager glob loads all level JSON at startup (acceptable now; revisit for large catalogs).
+11. Persistent currency, shop and replay-farming rewards are intentionally absent.
+12. Save data is local-only; clearing site data removes progress.

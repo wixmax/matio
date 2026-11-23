@@ -113,6 +113,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.jumpController.cancelBufferedJump();
   }
 
+  /** Stops movement without teleporting (used when a level is completed). */
+  stopMotion(): void {
+    this.arcadeBody.setAcceleration(0, 0);
+    this.arcadeBody.setVelocity(0, 0);
+  }
+
   get grounded(): boolean {
     return this.isGrounded();
   }

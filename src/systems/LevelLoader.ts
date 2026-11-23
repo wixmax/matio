@@ -6,17 +6,25 @@ import type {
   LevelLoadFailure,
 } from '../types/level-runtime';
 import { createLevelBackdrop } from '../factories/BackdropFactory';
-import { createGoalMarker } from '../factories/GoalMarkerFactory';
+import { createCollectibles, type CollectibleRuntime } from '../factories/CollectibleFactory';
+import { createGoalMarker, type GoalRuntime } from '../factories/GoalMarkerFactory';
 import { createTerrain } from '../factories/TerrainFactory';
-import { createLevelGeometry, findSolidTerrainAtCell, summarizeIgnoredObjects } from './level-geometry';
+import {
+  createLevelGeometry,
+  findSolidTerrainAtCell,
+  summarizeUnimplementedObjects,
+} from './level-geometry';
 
 export interface LevelRuntime {
   readonly geometry: LevelGeometry;
   /** Static bodies that should be collided with the player. */
   readonly solids: Phaser.GameObjects.Rectangle[];
-  readonly goal: Phaser.GameObjects.Container;
+  readonly goal: GoalRuntime;
   readonly backdrop: Phaser.GameObjects.Graphics;
-  readonly ignoredObjects: IgnoredObjectSummary;
+  /** Coin/star instances and the group used for overlap. */
+  readonly collectibles: CollectibleRuntime;
+  /** Valid future object types (bomb/shield/magnet) deliberately not created. */
+  readonly unimplementedObjects: IgnoredObjectSummary;
 }
 
 export type LevelLoadResult =
@@ -25,10 +33,11 @@ export type LevelLoadResult =
 
 /**
  * Phaser-aware level orchestration: converts a validated definition into
- * geometry, placeholder visuals, static bodies and a goal marker.
+ * geometry, placeholder visuals, static bodies, collectibles and a goal
+ * marker/sensor.
  *
- * It deliberately does not create the player, input, camera or colliders; those
- * are GameScene's wiring responsibilities.
+ * It deliberately does not create the player, input, camera, HUD or colliders;
+ * those are GameScene's wiring responsibilities.
  */
 export function loadLevel(scene: Phaser.Scene, level: LevelDefinition): LevelLoadResult {
   const blockingTerrain = findSolidTerrainAtCell(level, level.spawn);
@@ -54,11 +63,18 @@ export function loadLevel(scene: Phaser.Scene, level: LevelDefinition): LevelLoa
   const backdrop = createLevelBackdrop(scene, level);
   const terrain = createTerrain(scene, geometry);
   const goal = createGoalMarker(scene, geometry.goal);
-  const ignoredObjects = summarizeIgnoredObjects(level);
+  const collectibles = createCollectibles(scene, geometry.collectibles);
+  const unimplementedObjects = summarizeUnimplementedObjects(level);
 
-  if (import.meta.env.DEV && ignoredObjects.total > 0) {
+  if (import.meta.env.DEV) {
+    if (unimplementedObjects.total > 0) {
+      console.info(
+        `[LevelLoader] Level "${level.id}" contains ${unimplementedObjects.total} unimplemented object(s) (${formatObjectSummary(unimplementedObjects)}); they are preserved in JSON but not instantiated.`,
+      );
+    }
+
     console.info(
-      `[LevelLoader] Level "${level.id}" contains ${ignoredObjects.total} object(s) (${formatObjectSummary(ignoredObjects)}); collectibles are not implemented yet, so they are ignored.`,
+      `[LevelLoader] Level "${level.id}" collectibles: ${geometry.collectibleTotals.coins} coin(s), ${geometry.collectibleTotals.stars} collectible star(s).`,
     );
   }
 
@@ -69,7 +85,8 @@ export function loadLevel(scene: Phaser.Scene, level: LevelDefinition): LevelLoa
       solids: terrain.solids,
       goal,
       backdrop,
-      ignoredObjects,
+      collectibles,
+      unimplementedObjects,
     },
   };
 }

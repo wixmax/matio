@@ -64,13 +64,18 @@ JSON-driven levels, terrain (ground, platforms, blocks, water), level goals, wor
 themes, backgrounds and parallax.
 
 ### Collectibles and power-ups
-Coins, stars, bombs, shields, magnets, temporary effects and their UI feedback.
-
-### Enemies
-Reusable AI behaviors (patrol, chase, flyer, turret), damage rules, defeat rules and respawn logic.
+Coins and collectible stars are implemented: JSON placement, idempotent overlap, HUD counters,
+score feedback, persistent best-collection records. Bombs, shields, magnets and temporary effects
+remain planned.
 
 ### Scoring and progression
-Score breakdown per level, star ratings, unlock rules, save data, player profile.
+Score breakdown (coins, stars, completion), 1–3 star rating, explicit level order, unlock rules,
+versioned local save and a result screen are implemented. Star ratings, advanced breakdowns,
+achievements and cloud save remain planned.
+
+### Enemies
+Reusable AI behaviors (patrol, chase, flyer, turret), damage rules, defeat rules and respawn logic
+remain planned.
 
 ### Meta systems (later)
 Shop, inventory, achievements, daily quests, daily rewards, lucky spin. These must remain optional
@@ -89,30 +94,29 @@ Original character skins, animation sets, particles, music and sound effects, vi
 
 Details and naming rules live in [ASSET_GUIDE.md](ASSET_GUIDE.md).
 
-## 7. Current milestone (Task 003)
+## 7. Current milestone (Task 004)
 
-Implemented: a reusable Arcade Physics player, acceleration/deceleration, variable-height jump,
-coyote time, jump buffering, unified keyboard/touch input, JSON-driven level discovery and validation,
-terrain generation with static collisions, goal markers, camera follow with world bounds, fall
-respawn, loading error handling, and three playable test levels. Procedural placeholder visuals and
-a development HUD remain.
+Implemented: the full first gameplay loop. Start a level → collect coins/stars → reach the goal →
+calculate score and 1–3 star rating → save best results → unlock the next level → retry, continue or
+return to the menu. Includes a camera-fixed HUD, basic level selection with locked states, a result
+screen, explicit campaign order and versioned localStorage save with validation/recovery.
 
-In scope for this milestone: a reusable JSON-driven world, camera behavior, collision correctness,
-level authoring without TypeScript, and loading diagnostics.
+In scope for this milestone: collectible/coin/star objects, overlap safety, scoring configuration,
+rating policy, goal completion, progression, local persistence, result UI and level selection.
 
-Out of scope: enemies, coins, power-ups, combat, goal completion/scoring, level progression,
-Tiled/editor integration, inventory, shop, daily rewards, achievements, save data, ads, Android
-packaging and final art/audio.
+Out of scope: enemies, combat, power-ups (bomb/shield/magnet runtime), shop, persistent wallet,
+achievements, daily rewards, Tiled/editor integration, ads, Android packaging and final art/audio.
 
-Success for this milestone: levels load from JSON, the player spawns and collides correctly, all
-shipped levels are reachable and can be selected in development, invalid/unknown levels show clear
-errors, the camera follows within bounds while HUD/touch UI stay fixed, and tests/build pass.
+Success for this milestone: collectibles are driven by JSON, each is collected once, falling keeps
+collected objects, Retry restores them, victory settles exactly once, best records cannot shrink,
+locked levels stay locked in production, progress survives refresh, and tests/build pass.
 
 ### Milestone history
 
 - **Task 001** — project foundation, scene navigation, responsive config, level-data contract.
 - **Task 002** — player controller, Arcade Physics and unified input.
 - **Task 003** — JSON level repository/loader, terrain/collision generation, goal markers and camera.
+- **Task 004** — collectibles, goal completion, scoring/rating, progression, result screen and save.
 
 ## 8. Product success criteria for the first playable
 

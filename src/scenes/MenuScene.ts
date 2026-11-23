@@ -1,18 +1,26 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../core/constants';
+import { requireLevelOrder } from '../core/level-order-config';
+import { getLevelRepository } from '../core/level-repository';
+import { getSaveStore } from '../core/save-store';
+import { isLevelUnlocked } from '../systems/progression';
+import type { LevelOrderConfig } from '../types/progression';
+import type { SaveData } from '../types/save';
 import { PALETTE, toCssColor } from '../ui/theme';
-import { addUiText } from '../ui/components/ui-text';
+import { formatRatingStars } from '../ui/components/rating-stars';
 import { TextButton } from '../ui/components/TextButton';
+import { addUiText } from '../ui/components/ui-text';
 
 /**
- * MenuScene - temporary startup screen.
+ * MenuScene - start screen and basic level select.
  *
- * All visuals are placeholder shapes, intentionally generated in code so the
- * milestone does not depend on art assets. The scene only orchestrates layout
- * and navigation; it owns no gameplay state.
+ * The menu reads the versioned local save to show locked/unlocked state and best
+ * ratings. It never writes save data. Locked cards are disabled buttons, so
+ * production UI cannot start a level whose progression lock is closed.
  */
 export class MenuScene extends Phaser.Scene {
   private startButton: TextButton | null = null;
+  private levelButtons: TextButton[] = [];
   private isStarting = false;
 
   constructor() {
@@ -20,12 +28,26 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.isStarting = false;
+    this.startButton = null;
+    this.levelButtons = [];
+
     this.cameras.main.setBackgroundColor(PALETTE.sky);
+
+    const order = requireLevelOrder();
+    const loadedSave = getSaveStore().load();
+
+    if (loadedSave.diagnostic !== undefined) {
+      console.warn(`[SaveStore] ${loadedSave.diagnostic}`);
+    }
+
+    const save = loadedSave.data;
 
     this.drawBackdrop();
     this.drawTitle();
-    this.drawStartButton();
-    this.drawVersionLabel();
+    this.drawStartButton(order, save);
+    this.drawLevelSelect(order, save);
+    this.drawFooter();
   }
 
   private drawBackdrop(): void {
@@ -73,48 +95,120 @@ export class MenuScene extends Phaser.Scene {
     const centerX = GAME_WIDTH / 2;
     const titleStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontStyle: 'bold',
-      fontSize: '78px',
+      fontSize: '62px',
       color: toCssColor(PALETTE.white),
       stroke: toCssColor(PALETTE.ink),
-      strokeThickness: 14,
+      strokeThickness: 12,
       align: 'center',
     };
 
     // Hard offset shadow keeps the cartoon look without a blur filter.
-    addUiText(this, centerX + 6, 166 + 7, 'Adventure Platformer', {
+    addUiText(this, centerX + 5, 89 + 6, 'Adventure Platformer', {
       ...titleStyle,
       color: toCssColor(PALETTE.ink),
-      strokeThickness: 14,
     }).setOrigin(0.5);
 
-    addUiText(this, centerX, 166, 'Adventure Platformer', titleStyle).setOrigin(0.5);
+    addUiText(this, centerX, 89, 'Adventure Platformer', titleStyle).setOrigin(0.5);
 
-    addUiText(this, centerX, 246, 'A colorful cartoon platformer', {
-      fontSize: '26px',
+    addUiText(this, centerX, 148, 'Collect coins, grab stars, reach the goal', {
+      fontSize: '23px',
       color: toCssColor(PALETTE.inkSoft),
       fontStyle: 'bold',
     }).setOrigin(0.5);
   }
 
-  private drawStartButton(): void {
-    this.startButton = new TextButton(this, GAME_WIDTH / 2, 445, {
+  private drawStartButton(order: LevelOrderConfig, save: SaveData): void {
+    const firstUnlockedId =
+      order.levels.find((levelId) => isLevelUnlocked(save.unlockedLevelIds, levelId)) ??
+      order.levels[0];
+
+    this.startButton = new TextButton(this, GAME_WIDTH / 2, 238, {
       label: 'START GAME',
       width: 400,
-      height: 104,
-      fontSize: 38,
-      onClick: () => this.startGame(),
+      height: 86,
+      fontSize: 34,
+      onClick: () => this.start(firstUnlockedId),
     });
 
-    addUiText(this, GAME_WIDTH / 2, 520, 'Click or tap to start', {
-      fontSize: '20px',
+    if (firstUnlockedId === undefined) {
+      this.startButton.setEnabled(false);
+    }
+
+    addUiText(this, GAME_WIDTH / 2, 290, 'Starts your first unlocked level', {
+      fontSize: '16px',
       color: toCssColor(PALETTE.inkSoft),
       fontStyle: 'bold',
     })
       .setOrigin(0.5)
-      .setAlpha(0.8);
+      .setAlpha(0.85);
   }
 
-  private drawVersionLabel(): void {
+  private drawLevelSelect(order: LevelOrderConfig, save: SaveData): void {
+    const repository = getLevelRepository();
+    const centerX = GAME_WIDTH / 2;
+
+    addUiText(this, centerX, 326, 'SELECT LEVEL', {
+      fontStyle: 'bold',
+      fontSize: '20px',
+      color: toCssColor(PALETTE.white),
+      stroke: toCssColor(PALETTE.ink),
+      strokeThickness: 5,
+    }).setOrigin(0.5);
+
+    const cardWidth = 340;
+    const cardHeight = 104;
+    const gap = 44;
+    const columns = Math.min(3, Math.max(1, order.levels.length));
+    const totalWidth = columns * cardWidth + (columns - 1) * gap;
+    const startX = centerX - totalWidth / 2 + cardWidth / 2;
+
+    order.levels.forEach((levelId, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const levelResult = repository.getLevel(levelId);
+      const levelName = levelResult.ok ? levelResult.value.name : levelId;
+      const unlocked = isLevelUnlocked(save.unlockedLevelIds, levelId);
+      const record = save.levels[levelId];
+      const number = String(index + 1).padStart(2, '0');
+
+      const subtitle = !unlocked
+        ? 'LOCKED'
+        : record === undefined
+          ? 'NOT COMPLETED'
+          : `BEST ${record.bestScore} · ${formatRatingStars(record.bestRatingStars)}`;
+
+      const button = new TextButton(
+        this,
+        startX + column * (cardWidth + gap),
+        400 + row * (cardHeight + 20),
+        {
+          label: `${number} · ${levelName}`,
+          subtitle,
+          width: cardWidth,
+          height: cardHeight,
+          fontSize: 21,
+          subtitleFontSize: 16,
+          onClick: () => this.start(levelId),
+        },
+      );
+
+      if (!unlocked || !levelResult.ok) {
+        button.setEnabled(false);
+      }
+
+      this.levelButtons.push(button);
+    });
+
+    addUiText(this, centerX, 478, 'Locked levels unlock in order when you complete the previous level', {
+      fontSize: '15px',
+      color: toCssColor(PALETTE.inkSoft),
+      fontStyle: 'bold',
+    })
+      .setOrigin(0.5)
+      .setAlpha(0.85);
+  }
+
+  private drawFooter(): void {
     addUiText(this, GAME_WIDTH - 28, GAME_HEIGHT - 22, `v${__APP_VERSION__} · development build`, {
       fontSize: '18px',
       color: toCssColor(PALETTE.mutedText),
@@ -123,13 +217,18 @@ export class MenuScene extends Phaser.Scene {
       .setAlpha(0.8);
   }
 
-  private startGame(): void {
-    if (this.isStarting) {
+  private start(levelId: string | undefined): void {
+    if (this.isStarting || levelId === undefined) {
       return;
     }
 
     this.isStarting = true;
     this.startButton?.setEnabled(false);
-    this.scene.start(SCENE_KEYS.GAME);
+
+    for (const button of this.levelButtons) {
+      button.setEnabled(false);
+    }
+
+    this.scene.start(SCENE_KEYS.GAME, { levelId });
   }
 }

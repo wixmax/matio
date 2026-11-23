@@ -3,6 +3,7 @@ import { APP_NAME, GAME_HEIGHT, GAME_WIDTH } from './constants';
 import { BootScene } from '../scenes/BootScene';
 import { MenuScene } from '../scenes/MenuScene';
 import { GameScene } from '../scenes/GameScene';
+import { ResultScene } from '../scenes/ResultScene';
 import { PALETTE } from '../ui/theme';
 import type { PlayerConfig } from '../types/player-config';
 
@@ -58,7 +59,7 @@ export function createGameConfig(playerConfig: PlayerConfig): Phaser.Types.Core.
         fps: 60,
       },
     },
-    scene: [BootScene, MenuScene, GameScene],
+    scene: [BootScene, MenuScene, GameScene, ResultScene],
     callbacks: {
       postBoot: (game) => {
         if (!import.meta.env.DEV) {

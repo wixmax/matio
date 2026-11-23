@@ -1,3 +1,8 @@
+import {
+  type CollectibleCounts,
+  type CollectiblePlacement,
+  isCollectibleType,
+} from '../types/collectible';
 import type {
   GridPoint,
   LevelDefinition,
@@ -22,6 +27,8 @@ import type {
  * - Spawn and goal identify a cell; their world anchor is the bottom-center of
  *   that cell. For the player this is the feet position; for the goal it is the
  *   base of the marker.
+ * - Collectibles identify a cell; their world anchor is the CENTER of that
+ *   cell, so placeholder art sits visually inside the authored tile.
  * - All pixel values use the level's own `tileSize`.
  */
 
@@ -48,6 +55,19 @@ export function cellBottomCenter(point: GridPoint, tileSize: number): WorldPoint
   };
 }
 
+/**
+ * Converts a collectible cell into its center.
+ *
+ * Task 004 decision: collectibles use the cell center, not the bottom-center
+ * convention used by the player and goal marker.
+ */
+export function cellCenter(point: GridPoint, tileSize: number): WorldPoint {
+  return {
+    x: (point.x + 0.5) * tileSize,
+    y: (point.y + 0.5) * tileSize,
+  };
+}
+
 export function createLevelGeometry(level: LevelDefinition): LevelGeometry {
   const tileSize = level.tileSize;
 
@@ -57,6 +77,8 @@ export function createLevelGeometry(level: LevelDefinition): LevelGeometry {
     solid: isSolidTerrainType(area.type),
   }));
 
+  const collectibles = createCollectiblePlacements(level);
+
   return {
     levelId: level.id,
     tileSize,
@@ -65,7 +87,54 @@ export function createLevelGeometry(level: LevelDefinition): LevelGeometry {
     spawn: cellBottomCenter(level.spawn, tileSize),
     goal: cellBottomCenter(level.goal, tileSize),
     terrain,
+    collectibles,
+    collectibleTotals: countCollectiblePlacements(collectibles),
   };
+}
+
+/**
+ * Builds deterministic coin/star placements.
+ *
+ * The key is derived from the validated object index, not from an optional
+ * content ID: it is stable for a given level file and cannot collide with
+ * another object's generated key.
+ */
+export function createCollectiblePlacements(level: LevelDefinition): CollectiblePlacement[] {
+  const placements: CollectiblePlacement[] = [];
+
+  level.objects.forEach((object, index) => {
+    if (!isCollectibleType(object.type)) {
+      return;
+    }
+
+    const center = cellCenter({ x: object.x, y: object.y }, level.tileSize);
+
+    placements.push({
+      key: `${object.type}:${index}`,
+      type: object.type,
+      x: center.x,
+      y: center.y,
+    });
+  });
+
+  return placements;
+}
+
+function countCollectiblePlacements(
+  placements: readonly CollectiblePlacement[],
+): CollectibleCounts {
+  let coins = 0;
+  let stars = 0;
+
+  for (const placement of placements) {
+    if (placement.type === 'coin') {
+      coins += 1;
+    } else {
+      stars += 1;
+    }
+  }
+
+  return { coins, stars };
 }
 
 /**
@@ -94,17 +163,24 @@ export function findSolidTerrainAtCell(
 }
 
 /**
- * Temporary object policy: validated object definitions are counted and ignored
- * until collectible systems exist. This keeps valid future content loadable.
+ * Future object policy: bomb/shield/magnet remain valid content but have no
+ * runtime behavior in Task 004. Coin/star are implemented and therefore not
+ * reported here.
  */
-export function summarizeIgnoredObjects(level: LevelDefinition): IgnoredObjectSummary {
+export function summarizeUnimplementedObjects(level: LevelDefinition): IgnoredObjectSummary {
   const byType: Partial<Record<LevelObjectType, number>> = {};
+  let total = 0;
 
   for (const object of level.objects) {
+    if (isCollectibleType(object.type)) {
+      continue;
+    }
+
     byType[object.type] = (byType[object.type] ?? 0) + 1;
+    total += 1;
   }
 
-  return { total: level.objects.length, byType };
+  return { total, byType };
 }
 
 /**

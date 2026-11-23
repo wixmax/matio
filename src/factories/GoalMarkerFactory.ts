@@ -3,15 +3,25 @@ import type { WorldPoint } from '../types/level-runtime';
 import { addUiText } from '../ui/components/ui-text';
 import { PALETTE, toCssColor } from '../ui/theme';
 
+export interface GoalRuntime {
+  /** Existing visual marker. */
+  readonly marker: Phaser.GameObjects.Container;
+  /** Non-solid overlap sensor positioned at the flag base. */
+  readonly sensor: Phaser.GameObjects.Zone;
+}
+
+const SENSOR_WIDTH = 96;
+const SENSOR_HEIGHT = 140;
+
 /**
- * Placeholder goal marker. It is intentionally visual-only in this milestone;
- * completion, scoring and progression belong to later tasks.
+ * Placeholder goal marker plus a non-blocking completion sensor.
+ *
+ * The sensor is a static Arcade body used exclusively with `overlap`, never a
+ * collider, so reaching the flag cannot block the player. The marker remains
+ * purely visual and positioned by the JSON goal cell.
  */
-export function createGoalMarker(
-  scene: Phaser.Scene,
-  goal: WorldPoint,
-): Phaser.GameObjects.Container {
-  const container = scene.add.container(goal.x, goal.y).setDepth(6);
+export function createGoalMarker(scene: Phaser.Scene, goal: WorldPoint): GoalRuntime {
+  const marker = scene.add.container(goal.x, goal.y).setDepth(6);
   const graphics = scene.add.graphics();
 
   // Base pad.
@@ -42,7 +52,15 @@ export function createGoalMarker(
     strokeThickness: 5,
   }).setOrigin(0.5, 1);
 
-  container.add([graphics, label]);
+  marker.add([graphics, label]);
 
-  return container;
+  const sensor = scene.add.zone(
+    goal.x,
+    goal.y - SENSOR_HEIGHT / 2,
+    SENSOR_WIDTH,
+    SENSOR_HEIGHT,
+  );
+  scene.physics.add.existing(sensor, true);
+
+  return { marker, sensor };
 }

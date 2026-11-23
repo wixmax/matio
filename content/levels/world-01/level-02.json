@@ -51,5 +51,35 @@
     { "type": "block", "x": 63, "y": 15, "width": 1, "height": 1 },
     { "type": "block", "x": 68, "y": 15, "width": 1, "height": 1 }
   ],
-  "objects": []
+  "objects": [
+    { "type": "coin", "x": 2, "y": 15 },
+    { "type": "coin", "x": 5, "y": 14 },
+    { "type": "coin", "x": 7, "y": 15 },
+    { "type": "coin", "x": 9, "y": 14 },
+    { "id": "star-01", "type": "star", "x": 11, "y": 12 },
+    { "type": "coin", "x": 15, "y": 15 },
+    { "type": "coin", "x": 16, "y": 14 },
+    { "type": "coin", "x": 18, "y": 13 },
+    { "type": "coin", "x": 23, "y": 14 },
+    { "type": "coin", "x": 26, "y": 14 },
+    { "type": "coin", "x": 31, "y": 15 },
+    { "type": "coin", "x": 34, "y": 14 },
+    { "type": "coin", "x": 36, "y": 13 },
+    { "id": "star-02", "type": "star", "x": 37, "y": 12 },
+    { "type": "coin", "x": 38, "y": 12 },
+    { "type": "coin", "x": 41, "y": 14 },
+    { "type": "coin", "x": 45, "y": 15 },
+    { "type": "coin", "x": 49, "y": 15 },
+    { "type": "coin", "x": 52, "y": 14 },
+    { "type": "coin", "x": 54, "y": 13 },
+    { "id": "star-03", "type": "star", "x": 55, "y": 12 },
+    { "type": "coin", "x": 57, "y": 15 },
+    { "type": "coin", "x": 59, "y": 14 },
+    { "type": "coin", "x": 62, "y": 15 },
+    { "type": "coin", "x": 67, "y": 15 },
+    { "type": "coin", "x": 70, "y": 14 },
+    { "type": "coin", "x": 75, "y": 14 },
+    { "type": "coin", "x": 78, "y": 15 },
+    { "type": "coin", "x": 79, "y": 15 }
+  ]
 }

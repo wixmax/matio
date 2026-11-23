@@ -4,48 +4,86 @@ import {
   CAMERA_FOLLOW_LERP_X,
   CAMERA_FOLLOW_LERP_Y,
   FALL_RESPAWN_MARGIN_TILES,
-  resolveRequestedLevelId,
 } from '../core/level-config';
-import { getLevelRepository } from '../core/level-repository';
 import { requirePlayerConfig } from '../core/player-config';
+import { getLevelRepository } from '../core/level-repository';
+import { getSaveStore } from '../core/save-store';
+import { requireScoringConfig } from '../core/scoring-config';
 import { Player } from '../entities/Player';
 import { InputManager } from '../input/InputManager';
+import { CollectionSystem, type CollectionSnapshot } from '../systems/CollectionSystem';
+import {
+  canStartCompletion,
+  isGameplayActive,
+  type GameplayState,
+} from '../systems/gameplay-state';
 import { computeCameraFrame } from '../systems/level-geometry';
-import { loadLevel } from '../systems/LevelLoader';
+import { resolveLevelLaunch } from '../systems/level-launch';
+import { loadLevel, type LevelLoadResult, type LevelRuntime } from '../systems/LevelLoader';
+import { isLevelUnlocked } from '../systems/progression';
+import { computeRatingStars, computeRunScore } from '../systems/scoring';
 import type { LevelDefinition } from '../types/level';
+import type { LevelResultData } from '../types/level-result';
 import type { LevelGeometry, LevelLoadFailure } from '../types/level-runtime';
 import { DebugHud } from '../ui/components/DebugHud';
+import { GameHud } from '../ui/components/GameHud';
 import { LevelErrorPanel } from '../ui/components/LevelErrorPanel';
 import { LevelHeader } from '../ui/components/LevelHeader';
 import { PALETTE } from '../ui/theme';
 
+export interface GameSceneData {
+  /** Explicit level chosen by the menu, result screen or retry. */
+  readonly levelId?: string;
+}
+
 /**
- * GameScene - JSON-driven level orchestration.
+ * GameScene - level orchestration and the gameplay loop.
  *
- * Responsibilities in Task 003:
- * - select/load a validated level,
- * - build terrain/goal/backdrop through the loader,
- * - spawn the existing Player at the JSON feet anchor,
- * - wire colliders, world bounds, camera follow and input,
- * - respawn on falls and handle loading errors.
+ * Responsibilities in Task 004:
+ * - select a validated level (progression-checked unless using the dev selector),
+ * - build terrain/goal/collectibles through LevelLoader,
+ * - spawn the player, wire colliders, overlap, camera, input and HUD,
+ * - respawn on falls without resetting this run's collected objects,
+ * - settle one completion exactly once and hand plain data to ResultScene.
  *
- * The scene contains no level layout data. Adding a level requires only a JSON
- * file under content/levels/.
+ * Level layout and tuning never live here; both come from validated JSON.
  */
 export class GameScene extends Phaser.Scene {
   private player: Player | null = null;
   private inputManager: InputManager | null = null;
   private debugHud: DebugHud | null = null;
+  private gameHud: GameHud | null = null;
   private level: LevelDefinition | null = null;
   private geometry: LevelGeometry | null = null;
+  private collectionSystem: CollectionSystem | null = null;
+
+  private explicitLevelId: string | undefined;
+  private state: GameplayState = 'loading';
   private respawnCount = 0;
 
   constructor() {
     super(SCENE_KEYS.GAME);
   }
 
+  init(data?: GameSceneData): void {
+    this.explicitLevelId = data?.levelId;
+    this.state = 'loading';
+    this.respawnCount = 0;
+    this.player = null;
+    this.inputManager = null;
+    this.debugHud = null;
+    this.gameHud = null;
+    this.level = null;
+    this.geometry = null;
+    this.collectionSystem = null;
+  }
+
   create(): void {
-    const requestedId = resolveRequestedLevelId(window.location.search, import.meta.env.DEV);
+    const launch = resolveLevelLaunch(
+      this.explicitLevelId,
+      window.location.search,
+      import.meta.env.DEV,
+    );
     const repository = getLevelRepository();
 
     if (import.meta.env.DEV) {
@@ -56,7 +94,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const levelResult = repository.getLevel(requestedId);
+    const levelResult = repository.getLevel(launch.levelId);
 
     if (!levelResult.ok) {
       this.showLevelError(levelResult.error);
@@ -64,7 +102,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     const level = levelResult.value;
-    let loadResult: ReturnType<typeof loadLevel>;
+
+    if (!launch.bypassLock) {
+      const loadedSave = getSaveStore().load();
+
+      if (loadedSave.diagnostic !== undefined) {
+        console.warn(`[SaveStore] ${loadedSave.diagnostic}`);
+      }
+
+      if (!isLevelUnlocked(loadedSave.data.unlockedLevelIds, level.id)) {
+        this.showLevelError({
+          code: 'locked-level',
+          levelId: level.id,
+          message: `Level "${level.id}" is locked. Complete the previous level in the campaign order to unlock it.`,
+        });
+        return;
+      }
+    }
+
+    let loadResult: LevelLoadResult;
 
     try {
       loadResult = loadLevel(this, level);
@@ -84,11 +140,16 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.startPlayableLevel(level, loadResult.runtime.geometry, loadResult.runtime.solids);
+    this.startPlayableLevel(level, loadResult.runtime);
   }
 
   override update(_time: number, delta: number): void {
-    if (this.player === null || this.inputManager === null || this.geometry === null) {
+    if (
+      !isGameplayActive(this.state) ||
+      this.player === null ||
+      this.inputManager === null ||
+      this.geometry === null
+    ) {
       return;
     }
 
@@ -105,6 +166,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const camera = this.cameras.main;
+    const snapshot = this.debugHud === null ? null : this.collectionSystem?.snapshot;
 
     this.debugHud?.update({
       levelId: this.level?.id ?? '',
@@ -119,18 +181,25 @@ export class GameScene extends Phaser.Scene {
       jumpBuffered: this.player.jumpBuffered,
       moveX: input.moveX,
       respawns: this.respawnCount,
+      coins: snapshot?.coins ?? 0,
+      totalCoins: this.geometry.collectibleTotals.coins,
+      stars: snapshot?.stars ?? 0,
+      totalStars: this.geometry.collectibleTotals.stars,
+      score: snapshot?.collectedPoints ?? 0,
+      gameplayState: this.state,
     });
   }
 
-  private startPlayableLevel(
-    level: LevelDefinition,
-    geometry: LevelGeometry,
-    solids: Phaser.GameObjects.Rectangle[],
-  ): void {
+  private startPlayableLevel(level: LevelDefinition, runtime: LevelRuntime): void {
     const playerConfig = requirePlayerConfig();
+    const scoring = requireScoringConfig();
 
     this.level = level;
-    this.geometry = geometry;
+    this.geometry = runtime.geometry;
+    this.state = 'playing';
+
+    // A previous completion may have paused the shared Arcade world.
+    this.physics.resume();
     this.cameras.main.setBackgroundColor(PALETTE.sky);
 
     // Left/right/top are blocked; the bottom stays open so gaps and water are
@@ -138,18 +207,39 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(
       0,
       0,
-      geometry.worldWidth,
-      geometry.worldHeight,
+      runtime.geometry.worldWidth,
+      runtime.geometry.worldHeight,
       true,
       true,
       true,
       false,
     );
 
-    this.player = new Player(this, geometry.spawn.x, geometry.spawn.y, playerConfig.movement);
-    this.physics.add.collider(this.player, solids);
+    this.player = new Player(
+      this,
+      runtime.geometry.spawn.x,
+      runtime.geometry.spawn.y,
+      playerConfig.movement,
+    );
+    this.physics.add.collider(this.player, runtime.solids);
 
-    this.configureCamera(geometry, this.player);
+    this.gameHud = new GameHud(this, level.name, runtime.geometry.collectibleTotals);
+
+    this.collectionSystem = new CollectionSystem({
+      scene: this,
+      player: this.player,
+      collectibles: runtime.collectibles.group,
+      scoring,
+      onChanged: (snapshot) => this.updateHud(snapshot),
+    });
+
+    this.physics.add.overlap(
+      this.player,
+      runtime.goal.sensor,
+      this.handleGoalReached,
+    );
+
+    this.configureCamera(runtime.geometry, this.player);
 
     this.inputManager = new InputManager(this, {
       enableResetKey: import.meta.env.DEV,
@@ -161,6 +251,8 @@ export class GameScene extends Phaser.Scene {
     if (import.meta.env.DEV) {
       this.debugHud = new DebugHud(this);
     }
+
+    this.updateHud(this.collectionSystem.snapshot);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
   }
@@ -180,6 +272,14 @@ export class GameScene extends Phaser.Scene {
     camera.centerOn(player.x, player.y);
   }
 
+  private updateHud(snapshot: CollectionSnapshot): void {
+    this.gameHud?.update({
+      coins: snapshot.coins,
+      stars: snapshot.stars,
+      score: snapshot.collectedPoints,
+    });
+  }
+
   private respawnPlayer(): void {
     if (this.player === null || this.geometry === null) {
       return;
@@ -187,12 +287,92 @@ export class GameScene extends Phaser.Scene {
 
     const spawn = this.geometry.spawn;
 
+    // Collection state is intentionally untouched: falling does not refund or
+    // reset coins/stars and the score for this attempt is preserved.
     this.player.respawnAt(spawn.x, spawn.y);
     this.cameras.main.centerOn(spawn.x, spawn.y);
     this.respawnCount += 1;
   }
 
+  /**
+   * Goal overlap handler. State is flipped synchronously before any work so a
+   * second overlap in the same physics step cannot settle the level twice.
+   */
+  private readonly handleGoalReached = (): void => {
+    if (
+      !canStartCompletion(this.state) ||
+      this.level === null ||
+      this.geometry === null ||
+      this.collectionSystem === null
+    ) {
+      return;
+    }
+
+    this.state = 'completing';
+
+    const level = this.level;
+    const geometry = this.geometry;
+    const collection = this.collectionSystem;
+    const snapshot = collection.snapshot;
+
+    collection.freeze();
+    this.inputManager?.destroy();
+    this.inputManager = null;
+    this.player?.stopMotion();
+
+    const scoring = requireScoringConfig();
+    const score = computeRunScore(
+      { coins: snapshot.coins, stars: snapshot.stars },
+      scoring,
+    ).total;
+    const ratingStars = computeRatingStars(
+      {
+        collectedCoins: snapshot.coins,
+        totalCoins: geometry.collectibleTotals.coins,
+        collectedStars: snapshot.stars,
+        totalStars: geometry.collectibleTotals.stars,
+      },
+      scoring,
+    );
+
+    const settlement = getSaveStore().recordCompletion({
+      levelId: level.id,
+      score,
+      ratingStars,
+      collectedCoins: snapshot.coins,
+      collectedStars: snapshot.stars,
+    });
+
+    if (!settlement.writeOk && settlement.diagnostic !== undefined) {
+      console.warn(`[SaveStore] ${settlement.diagnostic}`);
+    }
+
+    const result: LevelResultData = {
+      levelId: level.id,
+      levelName: level.name,
+      collectedCoins: snapshot.coins,
+      totalCoins: geometry.collectibleTotals.coins,
+      collectedStars: snapshot.stars,
+      totalCollectibleStars: geometry.collectibleTotals.stars,
+      score,
+      ratingStars,
+      bestRatingStars: settlement.update.record.bestRatingStars,
+      bestScore: settlement.update.record.bestScore,
+      isNewBest: settlement.update.isNewBest,
+      nextLevelId:
+        settlement.loadStatus === 'unsupported-version'
+          ? null
+          : settlement.update.nextLevelId,
+      progressSaved: settlement.writeOk,
+    };
+
+    this.state = 'results';
+    this.scene.start(SCENE_KEYS.RESULT, result);
+  };
+
   private showLevelError(failure: LevelLoadFailure): void {
+    this.state = 'error';
+
     const details = failure.details?.map((error) => `${error.path}: ${error.message}`).join('; ');
 
     console.error(`[GameScene] ${failure.message}${details ? ` ${details}` : ''}`);
@@ -207,6 +387,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleShutdown(): void {
+    // Physics colliders, bodies and display objects are owned and destroyed by
+    // the scene; only global input listeners need explicit teardown.
+    this.collectionSystem = null;
+
     this.inputManager?.destroy();
     this.inputManager = null;
 
@@ -214,8 +398,10 @@ export class GameScene extends Phaser.Scene {
     this.cameras?.main?.stopFollow();
 
     this.debugHud = null;
+    this.gameHud = null;
     this.player = null;
     this.geometry = null;
     this.level = null;
+    this.state = 'loading';
   }
 }

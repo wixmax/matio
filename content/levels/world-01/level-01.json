@@ -26,8 +26,19 @@
   "objects": [
     { "type": "coin", "x": 6, "y": 11 },
     { "type": "coin", "x": 7, "y": 11 },
-    { "id": "star-01", "type": "star", "x": 16, "y": 5 },
+    { "id": "star-01", "type": "star", "x": 9, "y": 10 },
+    { "type": "coin", "x": 10, "y": 11 },
+    { "type": "coin", "x": 14, "y": 11 },
+    { "type": "coin", "x": 16, "y": 10 },
+    { "type": "coin", "x": 18, "y": 11 },
+    { "type": "coin", "x": 19, "y": 10 },
     { "type": "bomb", "x": 23, "y": 10 },
-    { "id": "shield-01", "type": "shield", "x": 31, "y": 8 }
+    { "type": "coin", "x": 24, "y": 11 },
+    { "type": "coin", "x": 28, "y": 11 },
+    { "type": "coin", "x": 29, "y": 11 },
+    { "id": "star-02", "type": "star", "x": 30, "y": 9 },
+    { "type": "coin", "x": 31, "y": 11 },
+    { "id": "shield-01", "type": "shield", "x": 31, "y": 8 },
+    { "type": "coin", "x": 35, "y": 11 }
   ]
 }

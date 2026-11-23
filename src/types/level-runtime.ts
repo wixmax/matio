@@ -1,4 +1,5 @@
 import type { LevelObjectType, TerrainType } from './level';
+import type { CollectibleCounts, CollectiblePlacement } from './collectible';
 import type { ValidationError } from './validation';
 
 /**
@@ -52,6 +53,9 @@ export interface LevelGeometry {
   /** Goal marker anchor: bottom-center of the goal cell. */
   readonly goal: WorldPoint;
   readonly terrain: readonly TerrainPlacement[];
+  /** Coin/star objects converted to tile-center pixel positions. */
+  readonly collectibles: readonly CollectiblePlacement[];
+  readonly collectibleTotals: CollectibleCounts;
 }
 
 /**
@@ -79,6 +83,7 @@ export type LevelFailureCode =
   | 'invalid-level'
   | 'duplicate-id'
   | 'unsafe-spawn'
+  | 'locked-level'
   | 'load-failed';
 
 /** A user-facing level failure. Never exposed as a partially playable level. */

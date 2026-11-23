@@ -9,9 +9,9 @@ technical architect reviews each task. Read this file before doing anything.
   **Vitest 5.1.1**, npm, JSON content, Phaser Arcade Physics.
 - Logical resolution 1280×720, landscape-first, FIT scaling, WebGL with Canvas fallback.
 - No React/Vue/Angular/Next.js, no backend, no authentication, no database, no cloud services.
-- Current milestone: **Task 003 complete** — JSON-driven levels, terrain/collision generation,
-  goal marker, camera follow, level error handling and three test levels. Collectibles, goal
-  completion/scoring and progression are next.
+- Current milestone: **Task 004 complete** — JSON-driven levels, terrain/collision generation,
+  goal marker, camera follow, collectibles, goal completion, scoring/rating, level progression,
+  result screen and versioned local save. Enemies and combat are next.
 
 ## Mandatory rules
 
@@ -51,9 +51,8 @@ technical architect reviews each task. Read this file before doing anything.
 
 Do not add any of the following without an explicit task:
 
-- Tiled/editor integration, a level editor, enemies, AI, combat, coins/power-ups, inventory,
-  goal completion/scoring, save data.
-- Shop, achievements, daily quests, daily rewards, lucky spin, ads.
+- Tiled/editor integration, a level editor, enemies, AI, combat, power-ups, inventory.
+- Purchases, shop, achievements, daily quests, daily rewards, lucky spin, ads, wallet currency.
 - Final art/audio, full-screen/orientation lock, Android/Capacitor packaging.
 - New runtime dependencies, state libraries, UI frameworks, backends or analytics.
 
@@ -121,6 +120,21 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
   `(x·tile + tile/2, (y+1)·tile)`. Preserve the player feet-origin convention.
 - Every solid area gets one static body; `water` is intentionally non-solid. Do not add per-tile
   bodies or move players manually during physics updates.
+- Collectible objects use the **center** of their JSON cell: `(x + 0.5) · tileSize`,
+  `(y + 0.5) · tileSize`. Spawn/goal remain bottom-center.
+- A collectible is collected at most once per run. Keep the entity guard (`Collectible.collect()`)
+  and the run ledger (`CollectionLedger`) in place; never update score/HUD from a raw overlap.
+- Falling preserves collected objects and the current run score. Retry must start a new scene and
+  therefore a new run ledger; never reset collection state inside respawn logic.
+- Goal completion is settled exactly once (`playing` → `completing` → `results`). Do not add timers
+  or overlap callbacks that can settle twice.
+- Score points and the 2-star coin ratio live in `content/config/scoring.json`; never hardcode them
+  in scenes or systems. Score calculation stays Phaser-free.
+- Campaign order lives only in `content/config/level-order.json`; never infer it from file or
+  discovery order. Locked levels must not start through normal UI (the dev `?level=` selector is the
+  only bypass).
+- Save data is versioned and validated before use. Never trust localStorage; keep the storage
+  interface injectable and handle unavailable/corrupt/unsupported data without crashing.
 - Camera bounds come from JSON size; smoothing is 0.1 on X/Y with zoom 1. HUD/touch UI must keep
   `scrollFactor(0)` so it stays fixed while following.
 - Fall respawn uses `worldHeight + 2 * tileSize`; do not hardcode screen pixel limits.
@@ -150,6 +164,17 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
 - Add/change levels without editing TypeScript; use `?level=<id>` in development to load one.
 - Player configuration is versioned JSON (`content/config/player.json`, schema 1). Validate it and
   keep movement tuning there.
+- Valid-but-unimplemented object entries (`bomb`, `shield`, `magnet`) are preserved in JSON and
+  ignored at runtime with development diagnostics. Never turn them into coins or award score.
+- `content/config/scoring.json` is versioned (`schemaVersion: 1`) and validated by
+  `validateScoringConfig()` before gameplay starts.
+- `content/config/level-order.json` is versioned (`schemaVersion: 1`), structurally validated, and
+  cross-checked against discovered level IDs at startup. Missing references block the game with a
+  visible error.
+- Local save data uses `saveVersion: 1`, is validated by `validateSaveData()`, and is stored under
+  `matio.save.v1`. Never write transient scene/physics state. Best records are monotonic.
+- Collectible cells must not overlap solid terrain. Collectibles and rating stars are different
+  concepts: use `collectedStars` / `totalCollectibleStars` / `ratingStars` explicitly.
 - Schema changes bump `schemaVersion` and ship with migration + tests.
 - New asset conventions are in `docs/ASSET_GUIDE.md` (kebab-case names, 64 px grid, straight-alpha
   PNG, feet-center pivot). Do not add unapproved art.
@@ -161,11 +186,16 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
 - For scene/input/level changes: start the dev server, load each affected level (`?level=`), check
   spawn alignment, terrain/colliders, gaps/water respawn, goal marker, camera bounds/follow, fixed
   HUD/touch UI, error handling, restart cleanup and console output.
+- For collectible/progression changes also verify: coin/star collection updates HUD once, falling
+  keeps collected objects, Retry restores them, completion settles once, best results never shrink,
+  locked levels cannot start through normal UI, and saved progress survives a page refresh.
+- Test the production build with `npm run preview` for menu/result/HUD behavior; remember the dev
+  bridge and dev level selector are absent there.
 - Force touch controls with `?touch=1` when the test machine has no touchscreen. Synthetic touch
   events verify the Phaser input path, not a real device; say which was used.
 - If a background browser tab throttles `requestAnimationFrame`, stop `game.loop` and call
   `game.step(time, 16.666)` manually for deterministic verification. Do not ship that as logic.
-- Report exact command output (e.g. "71 tests passed", build sizes, console errors), not claims.
+- Report exact command output (e.g. "156 tests passed", build sizes, console errors), not claims.
 - Never describe unexecuted checks as successful.
 
 ## Reporting
