@@ -1,5 +1,14 @@
 # AGENTS.md — Instructions for AI Coding Agents
 
+Task 007-A form rules: validate `content/config/player-forms.json` before boot.
+Growth mushrooms use the existing overlap pipeline. Keep one growth clock in
+`ActiveEffects` and queue physical changes until Arcade has resolved collisions.
+Preserve the feet anchor, body history and movement through resizing. Check
+terrain, world bounds and live enemy bodies before growing. Pending growth is
+untimed until it fits. A cramped fall spawn retains any running duration while
+the physical form waits for clearance. Retry, Victory, Game Over and shutdown
+clear the attempt's transformation state.
+
 Task 006-B effect rules: validate tuning from `content/config/effects.json` before boot.
 Each attempt owns one `ActiveEffects` instance. CollectionSystem routes shield and magnet
 pickups to EffectSystem. Magnet pulls reachable coins using solid level geometry, and
@@ -23,10 +32,10 @@ technical architect reviews each task. Read this file before doing anything.
   **Vitest 5.1.1**, npm, JSON content, Phaser Arcade Physics.
 - Logical resolution 1280×720, landscape-first, FIT scaling, WebGL with Canvas fallback.
 - No React/Vue/Angular/Next.js, no backend, no authentication, no database, no cloud services.
-- Current milestone: **Task 006-B** — JSON-driven levels, terrain/collision generation,
+- Current milestone: **Task 007-A** — JSON-driven levels, terrain/collision generation,
   goal marker, camera follow, collectibles, scoring/rating, progression, local save, plus JSON
   enemy archetypes, patrol behavior, stomp/damage combat, player health/invulnerability and a
-  Game Over/retry flow, bomb throws and explosion combat, shield and coin magnet effects.
+  Game Over/retry flow, bomb throws and explosion combat, shield, coin magnet and player growth.
 
 ## Mandatory rules
 
@@ -125,8 +134,8 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
   plugins. All device handling belongs in `src/input/`.
 - Jump/coyote/buffer rules belong in `src/systems/jump-controller.ts` (engine-free, tested), not in
   the scene. Movement uses Arcade velocity/acceleration; never move the player by editing `x`/`y`.
-- Sprite origin is (0.5, 1) with the body offset defined in `src/entities/player-textures.ts`. Keep
-  body metrics and frame sizes consistent when changing visuals.
+- Sprite origin is (0.5, 1). `src/systems/player-form-rules.ts` derives each body offset from the
+  frame and form metrics. Keep the same feet pivot across animation frames and forms.
 - Enemy balance lives only in `content/config/enemies.json`; placements live in level JSON.
   Enemy entities must not hardcode health, speed, damage or score.
 - Combat tuning (health, invulnerability, knockback, stomp bounce/tolerance) lives only in

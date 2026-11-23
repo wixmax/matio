@@ -3,6 +3,7 @@ import { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { EnemyRuntime } from '../factories/EnemyFactory';
 import type { CombatConfig, HealthSnapshot } from '../types/combat';
+import type { PixelRect } from '../types/level-runtime';
 import { addUiText } from '../ui/components/ui-text';
 import { PALETTE, toCssColor } from '../ui/theme';
 import { classifyEnemyContact, resolveKnockbackDirection } from './combat-rules';
@@ -10,6 +11,7 @@ import { explosionIntersectsRect } from './bomb-rules';
 import { resolveEnemyDamage } from './effect-rules';
 import { EnemyLedger } from './enemy-ledger';
 import type { PlayerHealth } from './player-health';
+import { bodiesOverlap } from './player-form-rules';
 
 export interface EnemySnapshot {
   readonly defeatedCount: number;
@@ -97,6 +99,12 @@ export class EnemySystem {
 
   get defeatedPoints(): number {
     return this.ledger.points;
+  }
+
+  /** Growth must not manufacture a new overlap with a live combat body. */
+  intersectsLivingEnemy(rect: PixelRect): boolean {
+    return this.runtime.enemies.some((enemy) =>
+      enemy.active && enemy.isAlive && bodiesOverlap(rect, enemy.arcadeBody));
   }
 
   /** Shared damage entry point for external attacks, including explosions. */

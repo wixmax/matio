@@ -10,6 +10,7 @@ import { requireBombConfig } from '../core/bomb-config';
 import { requireEffectsConfig } from '../core/effects-config';
 import { requireEnemiesConfig } from '../core/enemies-config';
 import { requirePlayerConfig } from '../core/player-config';
+import { requirePlayerFormsConfig } from '../core/player-forms-config';
 import { getLevelRepository } from '../core/level-repository';
 import { getSaveStore } from '../core/save-store';
 import { requireScoringConfig } from '../core/scoring-config';
@@ -181,19 +182,19 @@ export class GameScene extends Phaser.Scene {
     this.player.tick(delta, input);
     this.enemySystem?.update(delta);
     this.bombSystem?.update(delta);
-    if (this.inputManager.consumeThrowRequest()) this.bombSystem?.throw();
 
     const fallLimit =
       this.geometry.worldHeight + FALL_RESPAWN_MARGIN_TILES * this.geometry.tileSize;
 
-    if (this.inputManager.consumeResetRequest() || this.player.y > fallLimit) {
+    if (this.inputManager.consumeResetRequest() || this.player.physicsBody.bottom > fallLimit) {
       this.respawnPlayer();
     }
 
     if (this.effectSystem !== null && !document.hidden) {
       this.effectSystem.update(delta);
-      this.gameHud?.updateEffects(this.effectSystem.active);
+      this.gameHud?.updateEffects(this.effectSystem.active, this.effectSystem.transformation.pending);
     }
+    if (this.inputManager.consumeThrowRequest()) this.bombSystem?.throw();
 
     const camera = this.cameras.main;
     const snapshot = this.debugHud === null ? null : this.collectionSystem?.snapshot;
@@ -208,6 +209,8 @@ export class GameScene extends Phaser.Scene {
       velocityY: this.player.velocityY,
       grounded: this.player.grounded,
       visualState: this.player.visualState,
+      form: this.effectSystem?.transformation.form ?? 'small',
+      growthPending: this.effectSystem?.transformation.pending ?? false,
       coyoteAvailable: this.player.coyoteAvailable,
       jumpBuffered: this.player.jumpBuffered,
       moveX: input.moveX,
@@ -286,6 +289,9 @@ export class GameScene extends Phaser.Scene {
       solids: solidTerrainRects(runtime.geometry),
       collection: this.collectionSystem,
       config: requireEffectsConfig(),
+      forms: requirePlayerFormsConfig(),
+      world: runtime.geometry,
+      intersectsEnemy: (body) => this.enemySystem?.intersectsLivingEnemy(body) ?? false,
     });
 
     this.physics.add.overlap(
@@ -383,6 +389,7 @@ export class GameScene extends Phaser.Scene {
 
     // Collection state is intentionally untouched: falling does not refund or
     // reset coins/stars and the score for this attempt is preserved.
+    this.effectSystem?.prepareRespawn(spawn);
     this.player.respawnAt(spawn.x, spawn.y);
     this.cameras.main.centerOn(spawn.x, spawn.y);
     this.respawnCount += 1;
@@ -565,7 +572,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private stopEffects(): void {
-    this.effectSystem?.dispose();
+    if (this.effectSystem === null) return;
+    this.effectSystem.dispose();
+    // On SHUTDOWN Phaser may already have destroyed the scene's text objects.
+    if (this.state === 'results' || this.state === 'completing' || this.state === 'gameover') {
+      this.gameHud?.updateEffects(this.effectSystem.active);
+    }
     this.effectSystem = null;
   }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import combatConfig from '../content/config/combat.json';
 import config from '../content/config/effects.json';
+import forms from '../content/config/player-forms.json';
 import { ActiveEffects } from '../src/systems/ActiveEffects';
 import { validateEffectsConfig } from '../src/systems/effects-config-validator';
 import { isMagnetPathClear, magnetStep, reachableCoinDistance, resolveEnemyDamage } from '../src/systems/effect-rules';
@@ -9,7 +10,7 @@ import { PlayerHealth } from '../src/systems/player-health';
 const valid = validateEffectsConfig(config);
 if (!valid.ok) throw new Error(JSON.stringify(valid.errors));
 const tuning = valid.value;
-const createEffects = () => new ActiveEffects(tuning);
+const createEffects = () => new ActiveEffects(tuning, forms.growth.durationMs);
 
 describe('effects config', () => {
   it('loads the shipped v1 tuning', () => {
@@ -114,7 +115,7 @@ describe('active effects', () => {
 
 describe('shield damage priority', () => {
   it('absorbs eligible damage and prevents repeated overlaps from spending another charge', () => {
-    const effects = new ActiveEffects({ ...tuning, shield: { ...tuning.shield, maxCharges: 2 } });
+    const effects = new ActiveEffects({ ...tuning, shield: { ...tuning.shield, maxCharges: 2 } }, forms.growth.durationMs);
     const health = new PlayerHealth(combatConfig.player);
     const absorb = () => effects.consumeShield();
     effects.activate('shield');

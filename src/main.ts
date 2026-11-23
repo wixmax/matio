@@ -9,6 +9,7 @@ import { formatEnemiesConfigErrors, getEnemiesConfigResult } from './core/enemie
 import { getLevelOrderResult } from './core/level-order-config';
 import { getLevelRepository } from './core/level-repository';
 import { formatPlayerConfigErrors, getPlayerConfigResult } from './core/player-config';
+import { getPlayerFormsConfigResult } from './core/player-forms-config';
 import { getScoringConfigResult } from './core/scoring-config';
 import { exposeGameForDebug, removeGameDebugBridge } from './core/dev-bridge';
 import { validateLevelOrderReferences } from './systems/progression';
@@ -16,6 +17,7 @@ import { validateLevelOrderReferences } from './systems/progression';
 installDevErrorOverlay();
 
 const playerConfigResult = getPlayerConfigResult();
+const playerFormsConfigResult = getPlayerFormsConfigResult();
 const scoringConfigResult = getScoringConfigResult();
 const enemiesConfigResult = getEnemiesConfigResult();
 const combatConfigResult = getCombatConfigResult();
@@ -26,6 +28,11 @@ const problems: string[] = [];
 
 if (!playerConfigResult.ok) {
   problems.push(`content/config/player.json\n${formatPlayerConfigErrors(playerConfigResult.errors)}`);
+}
+
+if (!playerFormsConfigResult.ok) {
+  const details = playerFormsConfigResult.errors.map(({ path, message }) => `${path}: ${message}`).join('\n');
+  problems.push(`content/config/player-forms.json\n${details}`);
 }
 
 if (!scoringConfigResult.ok) {
@@ -81,6 +88,7 @@ if (problems.length > 0) {
   showBlockingError('Invalid content configuration', detail);
 } else if (
   playerConfigResult.ok &&
+  playerFormsConfigResult.ok &&
   scoringConfigResult.ok &&
   enemiesConfigResult.ok &&
   combatConfigResult.ok &&

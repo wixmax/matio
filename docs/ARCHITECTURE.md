@@ -1,5 +1,52 @@
 # Architecture
 
+## Task 007-A player transformations
+
+`player-forms.json` schema 1 configures growth duration, visual scale and per-axis
+body multipliers. Startup validation requires a positive safe integer duration,
+scales in (1, 2] and enlarged body dimensions that fit the scaled frame. World body
+dimensions are rounded to the nearest pixel. The procedural source frame remains
+64 × 96 with origin (0.5, 1).
+
+| Form | Visual scale | Arcade size in world pixels | Arcade source size | Source offset from frame top-left |
+| --- | --- | --- | --- | --- |
+| Small | 1 | 38 × 84 | 38 × 84 | (13, 12) |
+| Big | 1.4 | 46 × 130 | (230/7) × (650/7) | (109/7, 22/7) |
+
+The big form's rendered offset is (21.8, 4.4) px. Both bodies share the same feet
+and horizontal center. `Player.resizeForm()` changes the existing Arcade body
+in `GameScene.update()`, after the collision pass and before Arcade post-update
+copies displacement to the sprite. It rebases the current and previous top-left
+positions by the same shape delta. Velocity, acceleration, contact flags and
+jump timers are retained. Stomp classification continues to use the prior
+bottom edge and actual descent. Shrink occupies a subset of the former body at
+the same anchor, including near walls and during a fall.
+
+The collectible callback queues a request. `PlayerTransformation` owns the
+physical form and any pending request, while the attempt's `ActiveEffects`
+owns the single growth duration alongside shield and magnet. `EffectSystem`
+checks the prospective body against cached solid terrain, full world bounds
+and live enemy bodies before a pending request is applied. Edge contact is
+allowed. The enemy check prevents a resize from creating a combat overlap.
+An accepted pickup starts or refreshes a full 20 seconds after the frame's
+effect clock advances. Countdown pauses with the scene or hidden document.
+
+Fall respawn checks clearance at the spawn and suspends the big body when needed.
+The original time continues running in that case, and the small player can
+leave the obstruction and resume the remaining interval. A fresh banked pickup
+remains untimed. Terminal paths dispose the effects and clear pending state.
+Retry builds a fresh run. Growth never changes damage or save rules.
+
+Bombs use the current body edge and proportional hand height. Shield aura and
+flash scale around the physical center. Magnet reads the current body center,
+and both overlap and pulled coins still settle via CollectionSystem.
+
+Future animation frames and AI-generated player sprites need a consistent
+bottom-center feet pivot across both forms, idle, run, jump, fall and landing.
+Keep source frames untrimmed or preserve the full source frame and pivot in
+atlas metadata. Update the frame-to-body mapping centrally if art dimensions
+change, then recheck grounded feet, headroom and hand placement in both forms.
+
 ## Task 006-A bomb combat
 
 `content/config/bombs.json` is validated before startup. Each GameScene run owns a
@@ -207,7 +254,7 @@ core/level-repository  ──►  systems/LevelRepository
 
 ### CollectibleFactory (`src/factories/CollectibleFactory.ts`)
 
-- One `Collectible` sprite per validated coin, star, shield or magnet placement.
+- One `Collectible` sprite per validated coin, star, shield, magnet or growth mushroom placement.
 - One Arcade group for a single player/collectibles overlap.
 - Bodies have gravity disabled and are immovable: pickup only, never a blocking obstacle.
 - Procedural textures live in `entities/collectible-textures.ts` and can be replaced by an atlas.
@@ -258,7 +305,8 @@ keeps the bundle lean; dev adds `window.__MATIO_GAME__` (`src/core/dev-bridge.ts
 - Terrain `x`/`y` is the **top-left tile**; pixel rect = tile rect × `tileSize`.
 - Spawn/goal cell anchor is **bottom-center**: `(x·tile + tile/2, (y+1)·tile)`.
 - Player sprite origin remains `(0.5, 1)`; `player.y` is feet.
-- Player body 38×84 at offset (13,12) inside the 64×96 frame; body bottom = feet.
+- The small player body is 38×84 at offset (13,12) inside the 64×96 frame.
+  Both small and big forms align the body bottom with the feet.
 - Camera/world dimensions = `size × tileSize`.
 - Fall respawn threshold = `worldHeight + 2·tileSize` (documented margin, not a fixed pixel).
 

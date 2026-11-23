@@ -18,7 +18,7 @@
 5. Check Phaser 4 APIs before using them: `node_modules/phaser/types/phaser.d.ts` or
    `node_modules/phaser/skills/<topic>/SKILL.md`. Do not copy Phaser 3 code from memory.
 6. For gameplay changes, identify the config/content involved: `player.json`, `enemies.json`,
-   `combat.json`, `bombs.json`, `effects.json`, `scoring.json`, `level-order.json`, level JSON and
+   `combat.json`, `bombs.json`, `effects.json`, `player-forms.json`, `scoring.json`, `level-order.json`, level JSON and
    the save schema are validated content, not inline constants.
 
 ## 3. Implementation loop
@@ -56,6 +56,14 @@ It uses scripted Arcade contacts, isolated storage and a manually stepped game l
 Review damage priority, terrain obstruction, coin settlement, pause, fall, Retry, Victory
 and Game Over. Run `/tests/bomb-browser.html?touch=1` for bomb and synthetic multitouch
 regressions. Check the production preview separately.
+
+Open `/tests/growth-browser.html?touch=1` in Vite dev for scripted growth checks.
+The fixture uses a test-only save and advances the real Arcade world. It covers
+body sizes and feet, keyboard movement and jumps, the existing level 02
+overhang, effect refresh and expiry, combat, bombs, shield and magnet, and the
+fall, Retry, Victory and Game Over paths. For a manual ceiling check in level 02,
+approach the mushroom at (56, 14) from the ground on its right and retreat right
+when the HUD shows `PENDING GROWTH`.
 
 ## 5. Coding standards
 

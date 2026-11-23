@@ -31,6 +31,7 @@ export class GameHud {
   private readonly bombsText: Phaser.GameObjects.Text;
   private readonly shieldText: Phaser.GameObjects.Text;
   private readonly magnetText: Phaser.GameObjects.Text;
+  private readonly growthText: Phaser.GameObjects.Text;
 
   private lastCounters = '';
   private lastScore = '';
@@ -39,6 +40,8 @@ export class GameHud {
   private shieldSeconds = 0;
   private shieldCharges = 0;
   private magnetSeconds = 0;
+  private growthSeconds = 0;
+  private growthPending = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -54,9 +57,9 @@ export class GameHud {
     const background = scene.add.graphics().setScrollFactor(0).setDepth(2100);
 
     background.fillStyle(PALETTE.ink, 0.42);
-    background.fillRoundedRect(centerX - 235, 10, 470, 147, 16);
+    background.fillRoundedRect(centerX - 235, 10, 470, 173, 16);
     background.lineStyle(3, PALETTE.white, 0.25);
-    background.strokeRoundedRect(centerX - 235, 10, 470, 147, 16);
+    background.strokeRoundedRect(centerX - 235, 10, 470, 173, 16);
 
     addUiText(scene, centerX, 18, levelName, {
       fontStyle: 'bold',
@@ -115,6 +118,9 @@ export class GameHud {
     this.magnetText = addUiText(scene, centerX + 105, 121, '', {
       ...effectStyle, color: toCssColor(PALETTE.sun),
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(2110);
+    this.growthText = addUiText(scene, centerX, 148, '', {
+      ...effectStyle, fontSize: '20px', color: toCssColor(PALETTE.white),
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(2110).setVisible(false);
 
     this.update(
       { coins: 0, stars: 0, score: 0, health: initialHealth, maxHealth, bombs: 0 },
@@ -122,10 +128,11 @@ export class GameHud {
     );
   }
 
-  updateEffects(effects: ActiveEffects): void {
+  updateEffects(effects: ActiveEffects, growthPending = false): void {
     const shieldSeconds = Math.ceil(effects.remainingMs('shield') / 1000);
     const magnetSeconds = Math.ceil(effects.remainingMs('magnet') / 1000);
     const charges = effects.shieldCharges;
+    const growthSeconds = growthPending ? 0 : Math.ceil(effects.remainingMs('growth') / 1000);
 
     if (shieldSeconds !== this.shieldSeconds || charges !== this.shieldCharges) {
       this.shieldSeconds = shieldSeconds;
@@ -135,6 +142,13 @@ export class GameHud {
     if (magnetSeconds !== this.magnetSeconds) {
       this.magnetSeconds = magnetSeconds;
       this.magnetText.setText(magnetSeconds > 0 ? `MAGNET  ${magnetSeconds}s` : '');
+    }
+    if (growthPending !== this.growthPending || growthSeconds !== this.growthSeconds) {
+      this.growthPending = growthPending;
+      this.growthSeconds = growthSeconds;
+      const text = growthSeconds > 0 ? `BIG · ${growthSeconds}s` : '';
+      this.growthText.setText(growthPending ? 'PENDING GROWTH' : text)
+        .setVisible(growthPending || growthSeconds > 0);
     }
   }
 

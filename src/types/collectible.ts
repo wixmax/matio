@@ -14,7 +14,8 @@ export const COLLECTIBLE_TYPES = ['coin', 'star'] as const;
 
 export type CollectibleType = (typeof COLLECTIBLE_TYPES)[number];
 
-export type CollectiblePickupType = CollectibleType | EffectType;
+export type EffectPickupType = Exclude<EffectType, 'growth'> | 'growth-mushroom';
+export type CollectiblePickupType = CollectibleType | EffectPickupType;
 
 /**
  * A validated collectible converted to world pixels.
@@ -42,7 +43,7 @@ export interface CollectibleTotals {
 }
 
 export function isCollectiblePickupType(type: LevelObjectType): type is CollectiblePickupType {
-  return isCollectibleType(type) || type === 'shield' || type === 'magnet';
+  return isCollectibleType(type) || type === 'shield' || type === 'magnet' || type === 'growth-mushroom';
 }
 
 export function isCollectibleType(type: LevelObjectType): type is CollectibleType {

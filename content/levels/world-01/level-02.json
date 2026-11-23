@@ -87,6 +87,7 @@
     { "type": "coin", "x": 75, "y": 14 },
     { "type": "coin", "x": 78, "y": 15 },
     { "type": "coin", "x": 79, "y": 15 },
+    { "id": "growth-01", "type": "growth-mushroom", "x": 56, "y": 14 },
     {
       "id": "mushroom-01",
       "type": "enemy",

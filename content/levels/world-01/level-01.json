@@ -42,6 +42,7 @@
     { "type": "coin", "x": 35, "y": 11 },
     { "id": "shield-01", "type": "shield", "x": 6, "y": 12 },
     { "id": "magnet-01", "type": "magnet", "x": 8, "y": 11 },
+    { "id": "growth-01", "type": "growth-mushroom", "x": 11, "y": 11 },
     {
       "id": "mushroom-01",
       "type": "enemy",

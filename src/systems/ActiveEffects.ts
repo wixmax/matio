@@ -5,22 +5,25 @@ interface EffectState {
   charges: number;
 }
 
-const EFFECT_TYPES = ['shield', 'magnet'] as const satisfies readonly EffectType[];
-
 /** One instance per attempt. Only the caller's gameplay delta advances time. */
 export class ActiveEffects {
   private readonly entries: Record<EffectType, EffectState> = {
     shield: { remainingMs: 0, charges: 0 },
     magnet: { remainingMs: 0, charges: 0 },
+    growth: { remainingMs: 0, charges: 0 },
   };
+  private readonly states = Object.values(this.entries);
   private disposed = false;
 
-  constructor(private readonly config: EffectsConfig) {}
+  constructor(
+    private readonly config: EffectsConfig,
+    private readonly growthDurationMs: number,
+  ) {}
 
   activate(type: EffectType): void {
     if (this.disposed) return;
     const effect = this.entries[type];
-    effect.remainingMs = this.config[type].durationMs;
+    effect.remainingMs = type === 'growth' ? this.growthDurationMs : this.config[type].durationMs;
 
     if (type === 'shield') {
       const { maxCharges, chargesPerPickup } = this.config.shield;
@@ -42,8 +45,7 @@ export class ActiveEffects {
 
   advance(deltaMs: number): void {
     if (this.disposed || !Number.isFinite(deltaMs) || deltaMs <= 0) return;
-    for (const type of EFFECT_TYPES) {
-      const effect = this.entries[type];
+    for (const effect of this.states) {
       effect.remainingMs = Math.max(0, effect.remainingMs - deltaMs);
       if (effect.remainingMs === 0) effect.charges = 0;
     }
@@ -58,9 +60,9 @@ export class ActiveEffects {
   }
 
   reset(): void {
-    for (const type of EFFECT_TYPES) {
-      this.entries[type].remainingMs = 0;
-      this.entries[type].charges = 0;
+    for (const effect of this.states) {
+      effect.remainingMs = 0;
+      effect.charges = 0;
     }
   }
 

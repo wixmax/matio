@@ -18,7 +18,8 @@ time; adding a valid file is enough to register a playable level.
 
 Status: schema 1 is implemented end-to-end (discovery, validation, terrain, colliders, collectibles,
 enemies, goal completion, camera, respawn, combat, scoring/rating, progression, save and error view).
-All six schema-1 object types are instantiated. Shield and magnet use the existing item shape.
+All seven schema-1 object types are instantiated. Shield, magnet and growth mushrooms use the
+existing item shape.
 
 ## 1. Coordinate system and anchors
 
@@ -83,11 +84,11 @@ loading without changing the JSON contract.
 
 Shipped levels:
 
-| ID | File | Name | Size (tiles) | Coins | Stars | Enemies | Unimplemented |
+| ID | File | Name | Size (tiles) | Coins | Stars | Enemies | Growth mushrooms |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | bomb, shield, magnet |
-| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | — |
-| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | — |
+| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | (11, 11) |
+| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | (56, 14) |
+| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | (1, 14), (25, 14) |
 
 The **default level** is `world-01-level-01` (`DEFAULT_LEVEL_ID`).
 
@@ -147,7 +148,8 @@ for performance.
 
 ## 5. Object behavior
 
-The schema accepts `coin`, `star`, `enemy`, `bomb`, `shield` and `magnet` objects with optional
+The schema accepts `coin`, `star`, `enemy`, `bomb`, `shield`, `magnet` and
+`growth-mushroom` objects with optional
 unique IDs.
 
 | Type | Implemented | Behavior |
@@ -158,6 +160,7 @@ unique IDs.
 | `bomb` | yes | Adds one bomb to the current run's inventory, with no score |
 | `shield` | yes | Refreshes the temporary shield and replenishes charges |
 | `magnet` | yes | Refreshes temporary attraction of nearby, reachable coins |
+| `growth-mushroom` | yes | Queues a temporary big form or refreshes active growth |
 
 Rules:
 
@@ -171,9 +174,19 @@ Rules:
 - Add power-ups to the `objects` array with a unique optional ID, for example
   `{ "id": "shield-01", "type": "shield", "x": 6, "y": 12 }` or
   `{ "id": "magnet-01", "type": "magnet", "x": 8, "y": 11 }`. Use reachable empty
-  cells. LevelLoader reports the path to any bomb, shield or magnet inside solid terrain.
+  cells. LevelLoader reports the path to any bomb, shield, magnet or growth mushroom inside
+  solid terrain.
   Shield and magnet tuning lives in `content/config/effects.json`. These pickups grant
   zero points and are excluded from coin/star totals.
+
+Growth uses the flat item variant
+`{ "id": "growth-01", "type": "growth-mushroom", "x": 11, "y": 11 }`.
+The pickup is non-solid and centered in its cell. It grants zero score and has
+no rating or save impact. For immediate growth, author at least 130 px of
+vertical clearance and 46 px of horizontal clearance around the player's feet.
+Level 02 uses the existing 128 px overhang at column 56, above the growth pickup
+at (56, 14). Approach along the ground from column 57 and step back to the right
+to clear the overhang. The main route can bypass the pickup.
 
 ### 5.1 Enemy objects
 
@@ -244,7 +257,9 @@ Archetype balance (health, speed, stompable, damage, score) is **not** authored 
 }
 ```
 
-The shipped level 01 contains 12 coins, 2 collectible stars, 3 enemies, 2 bomb pickups, one shield and one magnet. All placements use the same JSON array and share duplicate-ID validation.
+The shipped level 01 contains 12 coins, 2 collectible stars, 3 enemies, 2 bomb pickups,
+one shield, one magnet and one growth mushroom. All placements use the same JSON
+array and share duplicate-ID validation.
 
 ## 7. Validation and loading errors
 
@@ -280,6 +295,8 @@ Rules still enforced by the validator:
 8. Enemy objects: non-empty kebab-case `enemyId`, ordered in-bounds patrol columns containing the
    enemy cell. The loader additionally cross-checks the archetype registry and terrain support.
 9. Malformed JSON becomes a single `$` parse error.
+
+Earlier schema-1 levels are still valid without growth objects.
 
 ## 8. Camera and respawn contract
 

@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
-import type { CollectiblePickupType } from '../types/collectible';
-import type { EffectType } from '../types/effects';
+import type { CollectiblePickupType, EffectPickupType } from '../types/collectible';
 import { PALETTE } from '../ui/theme';
 
 /**
@@ -15,6 +14,7 @@ export const COLLECTIBLE_FRAME = {
   star: { width: 48, height: 48, bodyWidth: 32, bodyHeight: 32 },
   shield: { width: 40, height: 40, bodyWidth: 30, bodyHeight: 32 },
   magnet: { width: 40, height: 40, bodyWidth: 30, bodyHeight: 32 },
+  'growth-mushroom': { width: 40, height: 40, bodyWidth: 30, bodyHeight: 32 },
 } as const;
 
 export const COLLECTIBLE_TEXTURES: Readonly<Record<CollectiblePickupType, string>> = {
@@ -22,9 +22,10 @@ export const COLLECTIBLE_TEXTURES: Readonly<Record<CollectiblePickupType, string
   star: 'matio-collectible-star',
   shield: 'matio-collectible-shield',
   magnet: 'matio-collectible-magnet',
+  'growth-mushroom': 'matio-collectible-growth-mushroom',
 };
 
-export function ensureEffectPickupTexture(scene: Phaser.Scene, type: EffectType): void {
+export function ensureEffectPickupTexture(scene: Phaser.Scene, type: EffectPickupType): void {
   const key = COLLECTIBLE_TEXTURES[type];
   if (scene.textures.exists(key)) return;
 
@@ -41,7 +42,7 @@ export function ensureEffectPickupTexture(scene: Phaser.Scene, type: EffectType)
     graphics.lineStyle(3, PALETTE.white);
     graphics.lineBetween(20, 11, 20, 26);
     graphics.lineBetween(14, 18, 26, 18);
-  } else {
+  } else if (type === 'magnet') {
     graphics.fillStyle(PALETTE.ink);
     graphics.fillRoundedRect(4, 6, 32, 30, 10);
     graphics.fillStyle(PALETTE.player);
@@ -51,6 +52,18 @@ export function ensureEffectPickupTexture(scene: Phaser.Scene, type: EffectType)
     graphics.fillStyle(PALETTE.white);
     graphics.fillRect(7, 9, 9, 7);
     graphics.fillRect(24, 9, 9, 7);
+  } else {
+    graphics.fillStyle(PALETTE.ink);
+    graphics.fillRoundedRect(10, 18, 20, 18, 6);
+    graphics.fillRoundedRect(2, 4, 36, 24, 11);
+    graphics.fillStyle(PALETTE.white);
+    graphics.fillRoundedRect(13, 23, 14, 10, 4);
+    graphics.fillStyle(PALETTE.accentDark);
+    graphics.fillRoundedRect(5, 7, 30, 18, 8);
+    graphics.fillStyle(PALETTE.white);
+    graphics.fillCircle(13, 17, 3);
+    graphics.fillCircle(22, 12, 3);
+    graphics.fillCircle(28, 18, 2);
   }
   const frame = COLLECTIBLE_FRAME[type];
   graphics.generateTexture(key, frame.width, frame.height);

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { PLAYER_FRAME_HEIGHT, PLAYER_FRAME_WIDTH } from '../systems/player-form-rules';
 import { PALETTE } from '../ui/theme';
 
 /**
@@ -6,25 +7,9 @@ import { PALETTE } from '../ui/theme';
  *
  * Every frame is 64x96 with the feet at the bottom edge and the character
  * centered horizontally. The Player's Arcade body is smaller than the frame and
- * offset to the feet (see `PLAYER_BODY`). When real sprites arrive, only the
+ * offset to the feet (see player-form-rules). When real sprites arrive, only the
  * texture keys and this module change; movement/physics code stays untouched.
  */
-
-export const PLAYER_FRAME_WIDTH = 64;
-export const PLAYER_FRAME_HEIGHT = 96;
-
-/**
- * Collision body in source pixels, measured from the frame's top-left.
- * Body: 38x84 at offset (13, 12) -> spans x 13..51, y 12..96.
- * With the sprite origin at (0.5, 1), the body's bottom edge is exactly at the
- * sprite's `y`, which is the feet/ground convention used by the scene.
- */
-export const PLAYER_BODY = {
-  width: 38,
-  height: 84,
-  offsetX: 13,
-  offsetY: 12,
-} as const;
 
 export const PLAYER_TEXTURES = {
   idle: 'matio-player-idle',

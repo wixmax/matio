@@ -1,4 +1,4 @@
-export type EffectType = 'shield' | 'magnet';
+export type EffectType = 'shield' | 'magnet' | 'growth';
 
 export interface EffectsConfig {
   readonly schemaVersion: 1;

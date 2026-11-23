@@ -87,7 +87,7 @@ export class CollectionSystem {
 
     const type = target.collectibleType;
     if (!isCollectibleType(type)) {
-      this.onEffectPickup(type);
+      this.onEffectPickup(type === 'growth-mushroom' ? 'growth' : type);
       return;
     }
     if (!this.ledger.collect(target.collectibleKey, type)) {

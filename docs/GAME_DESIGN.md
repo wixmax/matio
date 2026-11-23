@@ -1,5 +1,16 @@
 # Game Design — Adventure Platformer
 
+Task 007-A adds the growth mushroom. The player starts small and becomes big for
+20 seconds once the larger body fits. Under an overhang, the pickup stays collected
+and the HUD shows `PENDING GROWTH`. The timer starts when the player steps clear.
+Another mushroom refreshes the interval. Health, stomp rules and knockback apply
+in both forms, and damage leaves the effect running. Shields and magnets can run
+at the same time. Bomb throws originate beside the current body at its hand height.
+
+Falling preserves the reward and time remaining. At a cramped spawn the player
+uses the small form until the big body fits again or the effect expires. Retry
+restores the mushrooms. Victory and Game Over end the attempt's effect state.
+
 Task 006-A adds run-specific bomb pickups and throwable Arcade projectiles.
 X/J or the touch THROW control launches a bomb in the player's facing direction.
 After its fuse, a radius-based explosion damages enemies through their existing
@@ -82,7 +93,7 @@ themes, backgrounds and parallax.
 ### Collectibles and power-ups
 Coins and collectible stars are implemented: JSON placement, idempotent overlap, HUD counters,
 score feedback, persistent best-collection records. Bomb pickups and throws operate within the
-current run. Shield and coin magnet pickups apply temporary effects during play.
+current run. Shield, coin magnet and growth mushroom pickups apply temporary effects during play.
 
 ### Scoring and progression
 Score breakdown (coins, collectible stars, enemy defeats, completion), 1–3 star rating, explicit
@@ -142,6 +153,7 @@ health/enemies/collectibles, falling keeps collections and health, and tests/typ
 - **Task 005** — enemy archetypes/patrol, stomp combat, player health/damage, health HUD and Game Over.
 - **Task 006-A** — bomb pickups, throws and explosion combat.
 - **Task 006-B** — temporary shield and coin magnet pickups, effects, and HUD.
+- **Task 007-A** — temporary small/big transformations with feet-anchored Arcade bodies.
 
 ## 8. Product success criteria for the first playable
 

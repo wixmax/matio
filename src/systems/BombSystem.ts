@@ -4,7 +4,7 @@ import type { EnemySystem } from './EnemySystem';
 import type { BombConfig } from '../types/bomb';
 import type { LevelDefinition } from '../types/level';
 import { cellCenter } from './level-geometry';
-import { canThrowBomb } from './bomb-rules';
+import { bombSpawn, BOMB_BODY_SIZE, canThrowBomb } from './bomb-rules';
 import { BombInventory } from './bomb-inventory';
 import { PALETTE } from '../ui/theme';
 
@@ -63,15 +63,14 @@ export class BombSystem {
       this.settings, this.inventory.available, this.active.size, this.elapsedMs - this.lastThrowMs,
     )) return false;
     const direction = this.player.facingDirection;
-    const x = this.player.x + direction * 32;
-    const y = this.player.y - 55;
+    const { x, y } = bombSpawn(this.player.physicsBody, direction);
     if (x < 16 || x > this.scene.physics.world.bounds.right - 16) return false;
     const bomb = this.scene.physics.add.sprite(x, y, TEXTURE);
     // Arcade applies group defaults on insertion, including velocity and gravity.
     this.projectiles.add(bomb);
     const body = bomb.body;
     if (!(body instanceof Phaser.Physics.Arcade.Body)) { bomb.destroy(); return false; }
-    body.setSize(24, 24, true);
+    body.setSize(BOMB_BODY_SIZE, BOMB_BODY_SIZE, true);
     body.setGravityY(this.settings.gravity - this.scene.physics.world.gravity.y);
     body.setVelocity(direction * this.settings.throwVelocityX, this.settings.throwVelocityY);
     body.setBounce(0.25, 0.2);

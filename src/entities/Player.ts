@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import type { PlayerInputState, PlayerVisualState } from '../types/player';
 import type { PlayerMovementConfig } from '../types/player-config';
+import type { WorldPoint } from '../types/level-runtime';
 import { JumpController } from '../systems/jump-controller';
-import { ensurePlayerTextures, PLAYER_BODY, PLAYER_TEXTURES } from './player-textures';
+import { bodyAtFeet, bodySourceMetrics, SMALL_FORM, type PlayerFormMetrics } from '../systems/player-form-rules';
+import { ensurePlayerTextures, PLAYER_TEXTURES } from './player-textures';
 
 const RUN_FRAME_MS = 100;
 const LANDING_VISUAL_MS = 110;
@@ -29,7 +31,7 @@ const DAMAGE_FLASH_ALPHA = 0.45;
  * - Sprite origin is (0.5, 1): `player.y` is the feet position.
  * - The collision body is 38x84 at offset (13, 12) inside the 64x96 frame, so the
  *   body bottom matches the feet exactly. Horizontally it is centered.
- * - The body does not scale with visuals; state changes only swap textures.
+ * - Form changes apply validated collision metrics independently of animation.
  */
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private readonly arcadeBody: Phaser.Physics.Arcade.Body;
@@ -67,8 +69,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
     this.arcadeBody = body;
 
-    body.setSize(PLAYER_BODY.width, PLAYER_BODY.height, false);
-    body.setOffset(PLAYER_BODY.offsetX, PLAYER_BODY.offsetY);
+    this.applyFormMetrics(SMALL_FORM);
+    body.updateFromGameObject();
     body.setCollideWorldBounds(true);
     body.setMaxVelocity(movement.maxSpeed, movement.maxFallSpeed);
     body.setDragX(movement.deceleration);
@@ -109,13 +111,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   /** Teleports the player to a safe position and clears all motion/timers. */
   respawnAt(x: number, y: number): void {
-    // Body.reset positions the body's top-left and the sprite, but not the body
-    // offset. The next physics preUpdate re-applies the offset before syncing
-    // prev/prevFrame, so do not call updateFromGameObject here: doing so would
-    // make postUpdate shift the sprite by the body offset.
-    this.arcadeBody.reset(x, y);
-    this.arcadeBody.setVelocity(0, 0);
-    this.arcadeBody.setAccelerationX(0);
+    const body = this.arcadeBody;
+    body.reset(x, y);
 
     this.jumpController.reset();
     this.landingRemainingMs = 0;
@@ -133,6 +130,39 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.facing = 1;
     this.setFlipX(false);
     this.setTexture(PLAYER_TEXTURES.idle);
+    // reset() ignores the custom offset. Align both histories with the corrected
+    // body so the pending Arcade postUpdate cannot displace the respawn.
+    body.updateFromGameObject();
+    body.prev.copy(body.position);
+    body.prevFrame.copy(body.position);
+  }
+
+  get feet(): WorldPoint {
+    const body = this.arcadeBody;
+    return { x: body.left + body.width / 2, y: body.bottom };
+  }
+
+  /** Apply after Arcade's collision pass, before its sprite synchronization. */
+  resizeForm(form: PlayerFormMetrics): void {
+    const body = this.arcadeBody;
+    const target = bodyAtFeet(this.feet, form);
+    const shiftX = target.x - body.x;
+    const shiftY = target.y - body.y;
+    this.applyFormMetrics(form);
+    body.position.set(target.x, target.y);
+    body.updateCenter();
+    // The shape change moves the top-left, but is neither player movement nor
+    // a new stomp. Rebase both histories without changing velocity or flags.
+    body.prev.set(body.prev.x + shiftX, body.prev.y + shiftY);
+    body.prevFrame.set(body.prevFrame.x + shiftX, body.prevFrame.y + shiftY);
+  }
+
+  private applyFormMetrics(form: PlayerFormMetrics): void {
+    const { width, height, offsetX, offsetY } = bodySourceMetrics(form);
+    this.setScale(form.visualScale);
+    this.arcadeBody.setSize(width, height, false);
+    this.arcadeBody.setOffset(offsetX, offsetY);
+    this.arcadeBody.updateBounds();
   }
 
   /** Drops a jump remembered before the browser lost focus. */

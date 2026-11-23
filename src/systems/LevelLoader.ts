@@ -85,7 +85,8 @@ export function loadLevel(
   }
 
   const blockedPickupIndex = level.objects.findIndex((object) =>
-    (object.type === 'bomb' || object.type === 'shield' || object.type === 'magnet') &&
+    (object.type === 'bomb' || object.type === 'shield' || object.type === 'magnet' ||
+      object.type === 'growth-mushroom') &&
     findSolidTerrainAtCell(level, object) !== null,
   );
   const blockedPickup = level.objects[blockedPickupIndex];

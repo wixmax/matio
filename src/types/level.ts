@@ -17,7 +17,7 @@ export const DEFAULT_TILE_SIZE = 64 as const;
 export const MAX_LEVEL_DIMENSION = 512;
 
 export const TERRAIN_TYPES = ['ground', 'platform', 'block', 'water'] as const;
-export const OBJECT_TYPES = ['coin', 'star', 'bomb', 'shield', 'magnet', 'enemy'] as const;
+export const OBJECT_TYPES = ['coin', 'star', 'bomb', 'shield', 'magnet', 'growth-mushroom', 'enemy'] as const;
 
 export type TerrainType = (typeof TERRAIN_TYPES)[number];
 export type LevelObjectType = (typeof OBJECT_TYPES)[number];

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "growth": {
+    "durationMs": 20000,
+    "visualScale": 1.4,
+    "bodyWidthMultiplier": 1.2,
+    "bodyHeightMultiplier": 1.55
+  }
+}

@@ -1,4 +1,16 @@
 import type { BombConfig } from '../types/bomb';
+import type { PixelRect, WorldPoint } from '../types/level-runtime';
+import { SMALL_FORM } from './player-form-rules';
+
+export const BOMB_BODY_SIZE = 24;
+
+export function bombSpawn(body: PixelRect, facing: -1 | 1): WorldPoint {
+  const clearance = BOMB_BODY_SIZE / 2 + 1;
+  return {
+    x: facing === 1 ? body.x + body.width + clearance : body.x - clearance,
+    y: body.y + body.height * (1 - 55 / SMALL_FORM.height),
+  };
+}
 
 export interface ExplosionRect {
   readonly x: number;

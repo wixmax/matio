@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { MoveDirection, PlayerVisualState } from '../../types/player';
+import type { PlayerForm } from '../../types/player-form';
 import { PALETTE, toCssColor } from '../theme';
 import { addUiText } from './ui-text';
 
@@ -12,6 +13,8 @@ export interface DebugHudState {
   readonly velocityY: number;
   readonly grounded: boolean;
   readonly visualState: PlayerVisualState;
+  readonly form: PlayerForm;
+  readonly growthPending: boolean;
   readonly coyoteAvailable: boolean;
   readonly jumpBuffered: boolean;
   readonly moveX: MoveDirection;
@@ -61,6 +64,7 @@ export class DebugHud {
       `scroll ${Math.round(state.scrollX)},${Math.round(state.scrollY)}`,
       `vx ${formatSigned(state.velocityX)}   vy ${formatSigned(state.velocityY)}`,
       `state ${state.visualState}   grounded ${state.grounded ? 'yes' : 'no'}`,
+      `form ${state.form}   pending growth ${state.growthPending ? 'yes' : 'no'}`,
       `coyote ${state.coyoteAvailable ? 'yes' : 'no'}   buffer ${state.jumpBuffered ? 'yes' : 'no'}`,
       `input ${formatSigned(state.moveX)}   respawns ${state.respawns}`,
       `coins ${state.coins}/${state.totalCoins}   stars ${state.stars}/${state.totalStars}`,
