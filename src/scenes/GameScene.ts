@@ -5,23 +5,33 @@ import {
   CAMERA_FOLLOW_LERP_Y,
   FALL_RESPAWN_MARGIN_TILES,
 } from '../core/level-config';
+import { requireCombatConfig } from '../core/combat-config';
+import { requireEnemiesConfig } from '../core/enemies-config';
 import { requirePlayerConfig } from '../core/player-config';
 import { getLevelRepository } from '../core/level-repository';
 import { getSaveStore } from '../core/save-store';
 import { requireScoringConfig } from '../core/scoring-config';
 import { Player } from '../entities/Player';
 import { InputManager } from '../input/InputManager';
-import { CollectionSystem, type CollectionSnapshot } from '../systems/CollectionSystem';
+import { CollectionSystem } from '../systems/CollectionSystem';
+import { EnemySystem } from '../systems/EnemySystem';
 import {
   canStartCompletion,
+  canStartGameOver,
   isGameplayActive,
   type GameplayState,
 } from '../systems/gameplay-state';
 import { computeCameraFrame } from '../systems/level-geometry';
 import { resolveLevelLaunch } from '../systems/level-launch';
 import { loadLevel, type LevelLoadResult, type LevelRuntime } from '../systems/LevelLoader';
+import { PlayerHealth } from '../systems/player-health';
 import { isLevelUnlocked } from '../systems/progression';
-import { computeRatingStars, computeRunScore } from '../systems/scoring';
+import {
+  computeCollectedPoints,
+  computeRatingStars,
+  computeRunScoreWithEnemies,
+} from '../systems/scoring';
+import type { GameOverData } from '../types/game-over';
 import type { LevelDefinition } from '../types/level';
 import type { LevelResultData } from '../types/level-result';
 import type { LevelGeometry, LevelLoadFailure } from '../types/level-runtime';
@@ -56,6 +66,8 @@ export class GameScene extends Phaser.Scene {
   private level: LevelDefinition | null = null;
   private geometry: LevelGeometry | null = null;
   private collectionSystem: CollectionSystem | null = null;
+  private enemySystem: EnemySystem | null = null;
+  private health: PlayerHealth | null = null;
 
   private explicitLevelId: string | undefined;
   private state: GameplayState = 'loading';
@@ -76,6 +88,8 @@ export class GameScene extends Phaser.Scene {
     this.level = null;
     this.geometry = null;
     this.collectionSystem = null;
+    this.enemySystem = null;
+    this.health = null;
   }
 
   create(): void {
@@ -123,7 +137,7 @@ export class GameScene extends Phaser.Scene {
     let loadResult: LevelLoadResult;
 
     try {
-      loadResult = loadLevel(this, level);
+      loadResult = loadLevel(this, level, { enemies: requireEnemiesConfig() });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
 
@@ -157,6 +171,7 @@ export class GameScene extends Phaser.Scene {
 
     const input = this.inputManager.getInputState();
     this.player.tick(delta, input);
+    this.enemySystem?.update(delta);
 
     const fallLimit =
       this.geometry.worldHeight + FALL_RESPAWN_MARGIN_TILES * this.geometry.tileSize;
@@ -167,6 +182,7 @@ export class GameScene extends Phaser.Scene {
 
     const camera = this.cameras.main;
     const snapshot = this.debugHud === null ? null : this.collectionSystem?.snapshot;
+    const enemySnapshot = this.debugHud === null ? null : this.enemySystem?.snapshot;
 
     this.debugHud?.update({
       levelId: this.level?.id ?? '',
@@ -185,7 +201,13 @@ export class GameScene extends Phaser.Scene {
       totalCoins: this.geometry.collectibleTotals.coins,
       stars: snapshot?.stars ?? 0,
       totalStars: this.geometry.collectibleTotals.stars,
-      score: snapshot?.collectedPoints ?? 0,
+      score: this.currentCollectedScore(),
+      health: this.health?.health ?? 0,
+      maxHealth: this.health?.maxHealth ?? 0,
+      invulnerable: this.health?.invulnerable ?? false,
+      enemiesDefeated: enemySnapshot?.defeatedCount ?? 0,
+      totalEnemies: enemySnapshot?.total ?? 0,
+      enemyPoints: enemySnapshot?.defeatedPoints ?? 0,
       gameplayState: this.state,
     });
   }
@@ -193,9 +215,11 @@ export class GameScene extends Phaser.Scene {
   private startPlayableLevel(level: LevelDefinition, runtime: LevelRuntime): void {
     const playerConfig = requirePlayerConfig();
     const scoring = requireScoringConfig();
+    const combat = requireCombatConfig();
 
     this.level = level;
     this.geometry = runtime.geometry;
+    this.health = new PlayerHealth(combat.player);
     this.state = 'playing';
 
     // A previous completion may have paused the shared Arcade world.
@@ -223,14 +247,20 @@ export class GameScene extends Phaser.Scene {
     );
     this.physics.add.collider(this.player, runtime.solids);
 
-    this.gameHud = new GameHud(this, level.name, runtime.geometry.collectibleTotals);
+    this.gameHud = new GameHud(
+      this,
+      level.name,
+      runtime.geometry.collectibleTotals,
+      this.health.health,
+      this.health.maxHealth,
+    );
 
     this.collectionSystem = new CollectionSystem({
       scene: this,
       player: this.player,
       collectibles: runtime.collectibles.group,
       scoring,
-      onChanged: (snapshot) => this.updateHud(snapshot),
+      onChanged: () => this.updateHud(),
     });
 
     this.physics.add.overlap(
@@ -238,6 +268,18 @@ export class GameScene extends Phaser.Scene {
       runtime.goal.sensor,
       this.handleGoalReached,
     );
+
+    this.enemySystem = new EnemySystem({
+      scene: this,
+      player: this.player,
+      runtime: runtime.enemies,
+      solids: runtime.solids,
+      combat,
+      health: this.health,
+      onChanged: () => this.updateHud(),
+      onPlayerDamaged: () => this.updateHud(),
+      onPlayerDefeated: () => this.handlePlayerDefeated(),
+    });
 
     this.configureCamera(runtime.geometry, this.player);
 
@@ -252,7 +294,7 @@ export class GameScene extends Phaser.Scene {
       this.debugHud = new DebugHud(this);
     }
 
-    this.updateHud(this.collectionSystem.snapshot);
+    this.updateHud();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
   }
@@ -272,12 +314,35 @@ export class GameScene extends Phaser.Scene {
     camera.centerOn(player.x, player.y);
   }
 
-  private updateHud(snapshot: CollectionSnapshot): void {
+  private updateHud(): void {
+    if (this.collectionSystem === null || this.health === null) {
+      return;
+    }
+
+    const snapshot = this.collectionSystem.snapshot;
+
     this.gameHud?.update({
       coins: snapshot.coins,
       stars: snapshot.stars,
-      score: snapshot.collectedPoints,
+      score: this.currentCollectedScore(),
+      health: this.health.health,
+      maxHealth: this.health.maxHealth,
     });
+  }
+
+  /** Coin/star/enemy points only; victory adds the completion bonus later. */
+  private currentCollectedScore(): number {
+    if (this.collectionSystem === null) {
+      return 0;
+    }
+
+    const snapshot = this.collectionSystem.snapshot;
+
+    return computeCollectedPoints(
+      { coins: snapshot.coins, stars: snapshot.stars },
+      requireScoringConfig(),
+      this.enemySystem?.defeatedPoints ?? 0,
+    );
   }
 
   private respawnPlayer(): void {
@@ -314,15 +379,19 @@ export class GameScene extends Phaser.Scene {
     const geometry = this.geometry;
     const collection = this.collectionSystem;
     const snapshot = collection.snapshot;
+    const enemySnapshot = this.enemySystem?.snapshot;
 
     collection.freeze();
+    this.enemySystem?.freeze();
     this.inputManager?.destroy();
     this.inputManager = null;
     this.player?.stopMotion();
 
     const scoring = requireScoringConfig();
-    const score = computeRunScore(
+    const enemyPoints = enemySnapshot?.defeatedPoints ?? 0;
+    const score = computeRunScoreWithEnemies(
       { coins: snapshot.coins, stars: snapshot.stars },
+      enemyPoints,
       scoring,
     ).total;
     const ratingStars = computeRatingStars(
@@ -354,6 +423,9 @@ export class GameScene extends Phaser.Scene {
       totalCoins: geometry.collectibleTotals.coins,
       collectedStars: snapshot.stars,
       totalCollectibleStars: geometry.collectibleTotals.stars,
+      enemiesDefeated: enemySnapshot?.defeatedCount ?? 0,
+      totalEnemies: enemySnapshot?.total ?? 0,
+      enemyPoints,
       score,
       ratingStars,
       bestRatingStars: settlement.update.record.bestRatingStars,
@@ -369,6 +441,53 @@ export class GameScene extends Phaser.Scene {
     this.state = 'results';
     this.scene.start(SCENE_KEYS.RESULT, result);
   };
+
+  /**
+   * Terminal failure handler. The state flip happens synchronously so a second
+   * contact in the same physics step cannot start another Game Over, and all
+   * collection/combat is frozen before the scene changes.
+   */
+  private handlePlayerDefeated(): void {
+    if (
+      !canStartGameOver(this.state) ||
+      this.level === null ||
+      this.collectionSystem === null ||
+      this.health === null
+    ) {
+      return;
+    }
+
+    this.state = 'gameover';
+
+    const collection = this.collectionSystem;
+    const enemySnapshot = this.enemySystem?.snapshot;
+    const snapshot = collection.snapshot;
+
+    collection.freeze();
+    this.enemySystem?.freeze();
+    this.inputManager?.destroy();
+    this.inputManager = null;
+    this.player?.stopMotion();
+
+    const data: GameOverData = {
+      levelId: this.level.id,
+      levelName: this.level.name,
+      collectedCoins: snapshot.coins,
+      totalCoins: this.geometry?.collectibleTotals.coins ?? 0,
+      collectedStars: snapshot.stars,
+      totalCollectibleStars: this.geometry?.collectibleTotals.stars ?? 0,
+      enemiesDefeated: enemySnapshot?.defeatedCount ?? 0,
+      totalEnemies: enemySnapshot?.total ?? 0,
+      enemyPoints: enemySnapshot?.defeatedPoints ?? 0,
+      score: computeCollectedPoints(
+        { coins: snapshot.coins, stars: snapshot.stars },
+        requireScoringConfig(),
+        enemySnapshot?.defeatedPoints ?? 0,
+      ),
+    };
+
+    this.scene.start(SCENE_KEYS.GAME_OVER, data);
+  }
 
   private showLevelError(failure: LevelLoadFailure): void {
     this.state = 'error';
@@ -388,8 +507,12 @@ export class GameScene extends Phaser.Scene {
 
   private handleShutdown(): void {
     // Physics colliders, bodies and display objects are owned and destroyed by
-    // the scene; only global input listeners need explicit teardown.
+    // the scene; only explicit system colliders and global input listeners need
+    // teardown.
+    this.enemySystem?.destroy();
+    this.enemySystem = null;
     this.collectionSystem = null;
+    this.health = null;
 
     this.inputManager?.destroy();
     this.inputManager = null;

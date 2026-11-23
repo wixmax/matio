@@ -11,9 +11,10 @@ time; adding a valid file is enough to register a playable level.
 - Default level / dev selector: `src/core/level-config.ts`
 
 Status: schema 1 is implemented end-to-end (discovery, validation, terrain, colliders, collectibles,
-goal completion, camera, respawn, scoring/rating, progression, save and error view). `coin` and
-`star` objects are instantiated; `bomb`, `shield` and `magnet` are validated but intentionally not
-implemented.
+enemies, goal completion, camera, respawn, combat, scoring/rating, progression, save and error view).
+`coin`, `star` and `enemy` objects are instantiated; `bomb`, `shield` and `magnet` are validated but
+intentionally not implemented. Enemy support is an additive schema 1 extension: older builds ignore
+the new object type, and no existing field changed meaning.
 
 ## 1. Coordinate system and anchors
 
@@ -26,6 +27,7 @@ implemented.
 | Default tile size | **64 px** (`DEFAULT_TILE_SIZE`) |
 | Terrain anchor | **Top-left tile** of the area |
 | Spawn/goal anchor | **Bottom-center of the named cell** |
+| Enemy anchor | **Bottom-center of the named cell** (feet) |
 | Collectible anchor | **Center of the named cell** |
 | Runtime movement units | Pixels per second (px/s), px/s² for gravity |
 
@@ -34,9 +36,11 @@ Conversion:
 ```text
 terrain pixel rect = (x * tileSize, y * tileSize, width * tileSize, height * tileSize)
 
-spawn/goal pixel = (x * tileSize + tileSize / 2, (y + 1) * tileSize)
+spawn/goal/enemy pixel = (x * tileSize + tileSize / 2, (y + 1) * tileSize)
 
 collectible pixel = ((x + 0.5) * tileSize, (y + 0.5) * tileSize)
+
+enemy patrol pixel extents = minX * tileSize .. (maxX + 1) * tileSize
 ```
 
 The spawn/goal cell names the cell that contains the entity's feet (or flag base). A spawn at
@@ -45,6 +49,10 @@ The spawn/goal cell names the cell that contains the entity's feet (or flag base
 dimensions on top of this conversion.
 
 A collectible at `{ "x": 6, "y": 11 }` with tile size 64 is centered at `(416, 736)`.
+
+An enemy at `{ "x": 12, "y": 12 }` with tile size 64 has its feet at `(800, 832)`. Patrol bounds
+`minX: 10, maxX: 16` mean the enemy body may span world X `640..1088` (body edges), not the cell
+centers. Patrol columns are inclusive.
 
 **Authoring rule:** place spawn/goal in an empty cell directly above solid terrain. A spawn cell
 inside solid terrain is rejected by the loader with an `unsafe-spawn` error before any terrain is
@@ -71,11 +79,11 @@ loading without changing the JSON contract.
 
 Shipped levels:
 
-| ID | File | Name | Size (tiles) | Coins | Stars | Unimplemented |
-| --- | --- | --- | --- | --- | --- | --- |
-| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | bomb, shield |
-| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | — |
-| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | — |
+| ID | File | Name | Size (tiles) | Coins | Stars | Enemies | Unimplemented |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | bomb, shield |
+| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | — |
+| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | — |
 
 The **default level** is `world-01-level-01` (`DEFAULT_LEVEL_ID`).
 
@@ -135,26 +143,61 @@ for performance.
 
 ## 5. Object behavior
 
-The schema accepts `coin`, `star`, `bomb`, `shield` and `magnet` objects with optional unique IDs.
+The schema accepts `coin`, `star`, `enemy`, `bomb`, `shield` and `magnet` objects with optional
+unique IDs.
 
 | Type | Implemented | Behavior |
 | --- | --- | --- |
 | `coin` | **yes** | Non-solid pickup, 100 points, counter/HUD update |
 | `star` | **yes** | Non-solid pickup, 500 points, stronger feedback |
+| `enemy` | **yes** | Patrol entity from an archetype; stomp/damage/score rules apply |
 | `bomb` | no | Valid content, preserved, never instantiated, no score |
 | `shield` | no | Valid content, preserved, never instantiated, no score |
 | `magnet` | no | Valid content, preserved, never instantiated, no score |
 
 Rules:
 
-- Placement is the **center** of the cell; use empty cells and prefer cells above a reachable
-  platform or ground.
+- Collectible placement is the **center** of the cell; use empty cells and prefer cells above a
+  reachable platform or ground.
 - A collectible must never be authored inside solid terrain. A content test enforces this for every
   shipped level.
 - Collection is idempotent per run. Collected objects stay collected after a fall; Retry creates a
   fresh attempt and restores them.
 - Spawn positions must not overlap solid terrain. The loader checks the spawn cell as a safety guard.
 - Unimplemented objects are logged in development with their counts and ignored at runtime.
+
+### 5.1 Enemy objects
+
+```json
+{
+  "id": "mushroom-01",
+  "type": "enemy",
+  "enemyId": "mushroom",
+  "x": 12,
+  "y": 12,
+  "patrol": { "minX": 10, "maxX": 16 }
+}
+```
+
+| Field | Rules |
+| --- | --- |
+| `id` | Optional; unique across every object in the level |
+| `type` | `"enemy"` |
+| `enemyId` | Required lowercase kebab-case ID declared in `content/config/enemies.json` |
+| `x`, `y` | Integer tile cell inside the level; anchor is bottom-center (feet) |
+| `patrol.minX`, `patrol.maxX` | Integer tile columns, `minX <= maxX`, inside `0..size.width-1`, containing `x` |
+
+Placement rules (enforced by the loader before any enemy is created):
+
+1. The enemy cell must not overlap solid terrain.
+2. The cell directly below must be solid (`ground`/`platform`/`block`), so the enemy starts grounded.
+3. `enemyId` must exist in the enemy registry; unknown archetypes show a blocking load error.
+4. Patrol bounds become body-edge pixel extents (`minX*tile .. (maxX+1)*tile`). Keep them on solid
+   ground; the behavior also reverses at authored bounds, walls and missing ledges.
+5. Keep enemy cells out of the player spawn cell and leave a safe approach.
+
+Archetype balance (health, speed, stompable, damage, score) is **not** authored per level. Edit
+`content/config/enemies.json`; the level only references the archetype ID.
 
 ## 6. Complete working example (level 01)
 
@@ -179,13 +222,22 @@ Rules:
     { "type": "coin", "x": 6, "y": 11 },
     { "type": "coin", "x": 7, "y": 11 },
     { "id": "star-01", "type": "star", "x": 9, "y": 10 },
-    { "type": "bomb", "x": 23, "y": 10 }
+    { "type": "bomb", "x": 23, "y": 10 },
+    {
+      "id": "mushroom-01",
+      "type": "enemy",
+      "enemyId": "mushroom",
+      "x": 12,
+      "y": 12,
+      "patrol": { "minX": 12, "maxX": 16 }
+    }
   ]
 }
 ```
 
-The shipped level 01 contains 12 coins, 2 collectible stars and legacy `bomb`/`shield` entries. The
-legacy objects are preserved but not created; coins and stars use the same JSON shape.
+The shipped level 01 contains 12 coins, 2 collectible stars, 3 enemies and legacy `bomb`/`shield`
+entries. Legacy objects are preserved but not created; coins, stars and enemies use the same JSON
+array and share duplicate-ID validation.
 
 ## 7. Validation and loading errors
 
@@ -218,7 +270,9 @@ Rules still enforced by the validator:
 5. Integer spawn/goal inside bounds.
 6. Terrain type + integer positive dimensions fitting the level.
 7. Object type/coords bounds + unique non-empty IDs.
-8. Malformed JSON becomes a single `$` parse error.
+8. Enemy objects: non-empty kebab-case `enemyId`, ordered in-bounds patrol columns containing the
+   enemy cell. The loader additionally cross-checks the archetype registry and terrain support.
+9. Malformed JSON becomes a single `$` parse error.
 
 ## 8. Camera and respawn contract
 
@@ -242,7 +296,9 @@ Rules still enforced by the validator:
    (roughly 3 tiles / 192 px).
 6. Add `coin`/`star` objects in empty cells after the path. Place at least one star on an optional
    platform. `bomb`/`shield`/`magnet` remain valid but have no runtime effect.
-7. Add the new ID to `content/config/level-order.json` (see below) if it belongs to the campaign.
+7. Optionally add `enemy` objects: empty cell, solid ground directly below, archetype from
+   `content/config/enemies.json`, ordered patrol columns containing the enemy cell. Keep the spawn
+   cell clear and add the new ID to `content/config/level-order.json` if it belongs to the campaign.
 8. Save, reload the dev server, and open:
 
    ```text
@@ -303,11 +359,51 @@ top is also 704, so the player starts standing correctly.
 ### 9.2 Scoring, rating and save configuration
 
 - `content/config/scoring.json` holds coin/star/completion points and the 2-star coin ratio.
+- `content/config/enemies.json` holds archetype balance; `content/config/combat.json` holds player
+  health, invulnerability, knockback, stomp bounce and contact tolerance.
 - `content/config/level-order.json` holds the campaign order.
 - `matio.save.v1` in localStorage holds a versioned save. Menu displays unlocked levels and best
   ratings; GameScene/ResultScene read the same validated store.
 - A level with zero coins or zero collectible stars cannot receive the corresponding higher rating
   threshold; empty levels award only 1 star on completion.
+
+### 9.3 How to add a fourth enemy archetype (JSON + existing behavior)
+
+1. Choose a lowercase kebab-case ID, for example `armored-beetle`.
+2. Add it to `content/config/enemies.json`:
+
+   ```json
+   "armored-beetle": {
+     "health": 3,
+     "speed": 25,
+     "behavior": "patrol",
+     "stompable": true,
+     "damage": 2,
+     "score": 500
+   }
+   ```
+
+3. Reference it from a level object:
+
+   ```json
+   {
+     "id": "beetle-01",
+     "type": "enemy",
+     "enemyId": "armored-beetle",
+     "x": 18,
+     "y": 11,
+     "patrol": { "minX": 17, "maxX": 20 }
+   }
+   ```
+
+4. Reload with `?level=<id>`. The placeholder texture is generated automatically under
+   `matio-enemy-armored-beetle`; no TypeScript change is needed.
+5. Run `npm run test`, `npm run typecheck` and `npm run build`.
+
+This works because `patrol` is an implemented behavior. JSON cannot create **new logic**: a new
+behavior value (for example `"chase"` or `"flyer"`) requires an implementation in
+`src/systems/enemy-behaviors.ts`, integration in `Enemy.tick()`, validation in
+`validateEnemiesConfig()`, and tests. Do not add a behavior name to JSON expecting it to work.
 
 ## 10. Evolution policy
 

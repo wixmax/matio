@@ -8,6 +8,15 @@ const RUN_FRAME_MS = 100;
 const LANDING_VISUAL_MS = 110;
 const RUN_SPEED_THRESHOLD = 12;
 
+/** Neutral input used while a damage input lock is active. */
+const NEUTRAL_INPUT: PlayerInputState = {
+  moveX: 0,
+  jumpPressed: false,
+  jumpHeld: false,
+};
+
+const DAMAGE_FLASH_ALPHA = 0.45;
+
 /**
  * Reusable player entity.
  *
@@ -33,6 +42,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private wasGrounded = false;
   private runFrameElapsedMs = 0;
   private runFrameIndex: 0 | 1 = 0;
+  private stunRemainingMs = 0;
+  private flashRemainingMs = 0;
+  private flashIntervalMs = 0;
+  private flashElapsedMs = 0;
+  private flashOn = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, movement: PlayerMovementConfig) {
     ensurePlayerTextures(scene);
@@ -64,10 +78,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   /** Advances movement, jump rules and visuals for one frame. */
   tick(deltaMs: number, input: PlayerInputState): void {
-    this.applyHorizontalIntent(input.moveX);
+    this.stunRemainingMs = Math.max(0, this.stunRemainingMs - deltaMs);
+
+    // A hit briefly removes movement intent without disabling physics or the
+    // whole player; gravity, collision and knockback keep running.
+    const effectiveInput = this.stunRemainingMs > 0 ? NEUTRAL_INPUT : input;
+
+    this.applyHorizontalIntent(effectiveInput.moveX);
 
     const grounded = this.isGrounded();
-    this.jumpController.update(deltaMs, grounded, input.jumpPressed);
+    this.jumpController.update(deltaMs, grounded, effectiveInput.jumpPressed);
 
     if (this.jumpController.consumeJump()) {
       this.arcadeBody.setVelocityY(this.jumpController.jumpVelocity);
@@ -76,13 +96,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     const jumpCutVelocity = this.jumpController.getJumpCutVelocity(
       this.arcadeBody.velocity.y,
-      input.jumpHeld,
+      effectiveInput.jumpHeld,
     );
 
     if (jumpCutVelocity !== null) {
       this.arcadeBody.setVelocityY(jumpCutVelocity);
     }
 
+    this.updateDamageFlash(deltaMs);
     this.updateVisualState(deltaMs, grounded);
   }
 
@@ -102,6 +123,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.runFrameElapsedMs = 0;
     this.runFrameIndex = 0;
     this.currentVisualState = 'idle';
+    this.stunRemainingMs = 0;
+    this.flashRemainingMs = 0;
+    this.flashElapsedMs = 0;
+    this.flashOn = false;
+    this.setAlpha(1);
+    this.clearTint();
 
     this.facing = 1;
     this.setFlipX(false);
@@ -117,6 +144,53 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   stopMotion(): void {
     this.arcadeBody.setAcceleration(0, 0);
     this.arcadeBody.setVelocity(0, 0);
+  }
+
+  /** Upward bounce after a successful stomp (negative velocity = up). */
+  bounce(velocityY: number): void {
+    this.arcadeBody.setVelocityY(velocityY);
+    this.landingRemainingMs = 0;
+  }
+
+  /** Sets knockback velocity directly; physics still applies gravity/drag. */
+  applyKnockback(velocityX: number, velocityY: number): void {
+    this.arcadeBody.setAccelerationX(0);
+    this.arcadeBody.setVelocity(velocityX, velocityY);
+  }
+
+  /** Ignores movement/jump intent for a short, configurable duration. */
+  stun(durationMs: number): void {
+    if (!Number.isFinite(durationMs) || durationMs <= 0) {
+      return;
+    }
+
+    this.stunRemainingMs = Math.max(this.stunRemainingMs, durationMs);
+  }
+
+  /** Alternates player alpha briefly so damage is visible without final art. */
+  startDamageFlash(durationMs: number, intervalMs: number): void {
+    if (
+      !Number.isFinite(durationMs) ||
+      !Number.isFinite(intervalMs) ||
+      durationMs <= 0 ||
+      intervalMs <= 0
+    ) {
+      return;
+    }
+
+    this.flashRemainingMs = durationMs;
+    this.flashIntervalMs = intervalMs;
+    this.flashElapsedMs = 0;
+    this.flashOn = true;
+    this.setAlpha(DAMAGE_FLASH_ALPHA);
+  }
+
+  get isStunned(): boolean {
+    return this.stunRemainingMs > 0;
+  }
+
+  get physicsBody(): Phaser.Physics.Arcade.Body {
+    return this.arcadeBody;
   }
 
   get grounded(): boolean {
@@ -145,6 +219,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   get facingDirection(): -1 | 1 {
     return this.facing;
+  }
+
+  private updateDamageFlash(deltaMs: number): void {
+    if (this.flashRemainingMs <= 0) {
+      return;
+    }
+
+    this.flashRemainingMs = Math.max(0, this.flashRemainingMs - deltaMs);
+    this.flashElapsedMs += deltaMs;
+
+    if (this.flashElapsedMs >= this.flashIntervalMs) {
+      this.flashElapsedMs = 0;
+      this.flashOn = !this.flashOn;
+      this.setAlpha(this.flashOn ? DAMAGE_FLASH_ALPHA : 1);
+    }
+
+    if (this.flashRemainingMs === 0) {
+      this.flashOn = false;
+      this.setAlpha(1);
+    }
   }
 
   private applyHorizontalIntent(moveX: PlayerInputState['moveX']): void {

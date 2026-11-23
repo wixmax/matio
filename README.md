@@ -3,11 +3,12 @@
 A lightweight, modular 2D side-scrolling platformer built with **Phaser 4**, **TypeScript** and **Vite**.
 The project is developed incrementally, one reviewed milestone at a time.
 
-**Current status: Task 004 — collectibles, victory and progression.** The game boots into a menu with
-level selection, loads validated JSON levels and runs the full loop: collect coins/stars, reach the
-goal, calculate score and a 1–3 star rating, save best results, unlock the next level and continue.
-Movement, variable jumping, coyote time, jump buffering, unified keyboard/touch controls, camera
-follow, respawn and versioned local save are in place. Enemies and combat are not implemented yet.
+**Current status: Task 005 — enemies, stomp combat and player health.** The game boots into a menu
+with level selection, loads validated JSON levels and runs the full loop: collect coins/stars, stomp
+or avoid JSON-defined enemies, reach the goal, calculate score (including enemy defeats) and a 1–3
+star rating, save best results, unlock the next level and continue. Movement, variable jumping,
+coyote time, jump buffering, unified keyboard/touch controls, camera follow, respawn, player health,
+invulnerability, knockback, Game Over/retry and versioned local save are in place.
 
 ## Requirements
 
@@ -35,10 +36,11 @@ Open <http://localhost:5173>. The port is fixed so it is predictable in CI and s
 | --- | --- | --- |
 | Move left | Arrow Left / A | Left button |
 | Move right | Arrow Right / D | Right button |
-| Jump | Arrow Up / W / Space | Jump button |
+| Jump / stomp | Arrow Up / W / Space | Jump button |
 | Respawn | R (development builds only) | Automatic after falling |
 
-Jumping is variable-height: release early for a short hop, hold for the full jump.
+Jumping is variable-height: release early for a short hop, hold for the full jump. Land on a
+stompable enemy from above to damage it and bounce; touching one from the side costs health.
 
 ## Touch controls
 
@@ -64,11 +66,11 @@ The development selector bypasses progression locks; production ignores it.
 
 Shipped levels:
 
-| ID | Name | Size (tiles) | Coins | Collectible stars |
-| --- | --- | --- | --- | --- |
-| `world-01-level-01` | Green Introduction | 40×15 | 12 | 2 |
-| `world-01-level-02` | Platform Challenge | 80×18 | 26 | 3 |
-| `world-01-level-03` | Water Valley | 90×16 | 29 | 4 |
+| ID | Name | Size (tiles) | Coins | Collectible stars | Enemies |
+| --- | --- | --- | --- | --- | --- |
+| `world-01-level-01` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail |
+| `world-01-level-02` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky |
+| `world-01-level-03` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky |
 
 Adding a level requires only a valid JSON file plus its ID in `level-order.json` — no TypeScript
 changes. See [How to create level-04.json](docs/LEVEL_FORMAT.md#9-how-to-create-level-04json-without-modifying-typescript).
@@ -89,7 +91,8 @@ Always run `typecheck`, `test` and `build` before handing a task back for review
 ## What works now
 
 - Phaser 4 boots with a centralized, responsive 1280×720 configuration and Arcade Physics.
-- `BootScene -> MenuScene -> GameScene -> ResultScene` navigation with mouse and touch.
+- `BootScene -> MenuScene -> GameScene -> ResultScene` and `GameOverScene` navigation with mouse
+  and touch.
 - A menu with START GAME and a three-level grid showing locked/unlocked state and best ratings.
 - A reusable `Player` entity driven by a normalized input snapshot, never by raw devices.
 - Acceleration/deceleration, facing direction and a procedural placeholder visual state machine
@@ -99,10 +102,17 @@ Always run `typecheck`, `test` and `build` before handing a task back for review
   static terrain collision, goal marker/sensor and loading-error screen.
 - Three playable test levels (`Green Introduction`, `Platform Challenge`, `Water Valley`).
 - Coins and collectible stars placed in JSON at tile centers, collected once, with HUD feedback.
-- Falling preserves collected objects and run score; Retry restores every collectible.
-- Goal completion with a one-time settlement, final score (coins + stars + completion bonus) and a
-  1–3 star rating that is separate from collectible stars.
-- Result screen with counts, score, best record, rating, RETRY, NEXT LEVEL and MAIN MENU.
+- Enemies placed in JSON with archetypes (mushroom, snail, spiky), feet anchors and patrol bounds.
+- Deterministic patrol with wall, bound and ledge/water reversal; terrain collision and gravity.
+- Stomp combat: mushrooms die in one stomp, snails need two, spiky cannot be stomped; one contact is
+  either a stomp or player damage, never both.
+- Player health (3 hearts), 1000 ms invulnerability, knockback, brief input lock and damage flash.
+- Health-zero Game Over with RETRY/MAIN MENU; no completion bonus, record or unlock is written.
+- Falling preserves collected objects, run score, health and enemy states; Retry restores all.
+- Goal completion with a one-time settlement, final score (coins + stars + enemy defeats +
+  completion bonus) and a 1–3 star rating that is separate from collectible stars.
+- Result screen with counts, enemy defeats/points, score, best record, rating, RETRY, NEXT LEVEL and
+  MAIN MENU.
 - Explicit campaign order (`content/config/level-order.json`) with initial unlock, next-level
   unlocking, replay and locked-level rejection in production.
 - Versioned localStorage save (`matio.save.v1`) with validation, corruption recovery, unavailable-
@@ -115,8 +125,9 @@ Always run `typecheck`, `test` and `build` before handing a task back for review
 - Player physics tuning and scoring loaded from validated external JSON
   (`content/config/player.json`, `content/config/scoring.json`).
 - Development-only debug HUD and dev bridge; production builds omit both.
-- 156 unit tests covering validation, geometry/camera math, collectibles, scoring/rating,
-  progression, saves, player configuration, input resolution and jump rules.
+- 233 unit tests covering validation, geometry/camera math, collectibles, enemies, patrol
+  behavior, stomp classification, player health/invulnerability, enemy scoring, gameplay states,
+  scoring/rating, progression, saves, player configuration, input resolution and jump rules.
 
 ## Scoring and persistence
 
@@ -124,11 +135,16 @@ Always run `typecheck`, `test` and `build` before handing a task back for review
 | --- | --- |
 | Coin | 100 |
 | Collectible star | 500 |
+| Mushroom defeat | 200 |
+| Snail defeat | 350 |
+| Spiky defeat | not possible in Task 005 (score 0 reserved) |
 | Level completion | 1000 |
 
-The HUD shows collected points while playing; the result adds the completion bonus. Rating rules:
-1 star for completing, 2 stars at ≥70% of coins, 3 stars only when every coin and collectible star in
-the level is collected. A level with no coins/stars cannot receive a higher rating by default.
+The HUD shows collected + enemy points while playing; the result adds the completion bonus. Rating
+rules: 1 star for completing, 2 stars at ≥70% of coins, 3 stars only when every coin and collectible
+star in the level is collected. Enemy defeats do not change the rating. A level with no coins/stars
+cannot receive a higher rating by default. A failed run shows only collected + enemy points and
+never writes a record or unlocks a level.
 
 Progress is stored locally under `matio.save.v1`. It keeps unlocked levels and per-level best score,
 best rating and best coin/star counts. There is no persistent wallet or shop. Corrupt/invalid saves
@@ -146,27 +162,29 @@ reset to first-launch data with a console diagnostic; an unsupported newer save 
 
 ## Explicitly not implemented yet
 
-Enemies, combat, power-ups (bomb/shield/magnet runtime), persistent wallet/currency, shop,
-Tiled/editor integration, inventory, daily rewards, achievements, ads, cloud save, Android packaging
-and final art/audio. Valid unimplemented object entries remain in level JSON with development
-diagnostics.
+Bombs, projectiles, shields, magnets, power-up inventory, chasing/flying enemies, enemy projectiles,
+bosses, permanent lives, persistent wallet/currency, shop, Tiled/editor integration, daily rewards,
+achievements, ads, cloud save, Android packaging and final art/audio. Valid unimplemented object
+entries remain in level JSON with development diagnostics. Spiky health is reserved for future combat
+methods.
 
 ## Project layout
 
 ```text
 public/assets/          Runtime art/audio, grouped by category (empty for now)
-content/levels/         Auto-discovered JSON levels (3 playable levels)
-content/config/         Validated gameplay config (player.json, scoring.json, level-order.json)
-src/core/               Game config, constants, level catalog/order, scoring/save singletons, dev bridge
-src/scenes/             Boot, Menu, Game and Result scenes (lifecycle + orchestration)
-src/entities/           Player, Collectible and procedural placeholder textures
-src/systems/            Validators, scoring/progression/save rules, jump rules, game state,
-                        level repository/geometry/loader, CollectionSystem
-src/factories/          Terrain, backdrop, goal marker and collectible construction
+content/levels/         Auto-discovered JSON levels (3 playable levels with enemies)
+content/config/         Validated gameplay config (player, enemies, combat, scoring, level order)
+src/core/               Game config, constants, config singletons, level catalog, dev bridge
+src/scenes/             Boot, Menu, Game, Result and GameOver scenes (lifecycle + orchestration)
+src/entities/           Player, Collectible, Enemy and procedural placeholder textures
+src/systems/            Validators, scoring/progression/save rules, jump rules, combat rules,
+                        player health, patrol behavior, enemy ledger, game state,
+                        level repository/geometry/loader, CollectionSystem, EnemySystem
+src/factories/          Terrain, backdrop, goal marker, collectible and enemy construction
 src/input/              Unified input manager, touch controls, pure input resolution
 src/ui/components/      Reusable UI pieces (text, buttons, HUD, header, debug/error panels)
 src/ui/screens/         Future composed UI screens (pause, shop)
-src/types/              Shared contracts (level, collectible, scoring, save, result, player, ...)
+src/types/              Shared contracts (level, collectible, enemy, combat, scoring, save, ...)
 src/utils/              Small engine-agnostic helpers
 tests/                  Vitest unit tests and content checks
 tools/                  Future developer scripts

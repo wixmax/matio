@@ -17,10 +17,13 @@ export const DEFAULT_TILE_SIZE = 64 as const;
 export const MAX_LEVEL_DIMENSION = 512;
 
 export const TERRAIN_TYPES = ['ground', 'platform', 'block', 'water'] as const;
-export const OBJECT_TYPES = ['coin', 'star', 'bomb', 'shield', 'magnet'] as const;
+export const OBJECT_TYPES = ['coin', 'star', 'bomb', 'shield', 'magnet', 'enemy'] as const;
 
 export type TerrainType = (typeof TERRAIN_TYPES)[number];
 export type LevelObjectType = (typeof OBJECT_TYPES)[number];
+
+/** Object types that are not enemy placements (collectibles and future items). */
+export type LevelItemObjectType = Exclude<LevelObjectType, 'enemy'>;
 
 /** Integer tile coordinate. */
 export interface GridPoint {
@@ -48,14 +51,43 @@ export interface LevelTerrainArea {
 }
 
 /**
- * A placed object. `id` is optional, but when present it must be unique inside
- * the level so systems can reference objects (quests, save data) reliably.
+ * Authored patrol bounds in tile columns, inclusive.
+ * `minX <= maxX`; both must fit inside the level and contain the enemy cell.
  */
-export interface LevelObject {
+export interface LevelEnemyPatrolBounds {
+  minX: number;
+  maxX: number;
+}
+
+/**
+ * A collectible or legacy/future item placement. `id` is optional, but when
+ * present it must be unique inside the level so systems can reference objects
+ * (quests, save data) reliably.
+ */
+export interface LevelItemObject {
   id?: string;
-  type: LevelObjectType;
+  type: LevelItemObjectType;
   x: number;
   y: number;
+}
+
+/**
+ * An enemy placement. `x`/`y` is the cell whose bottom-center is the enemy's
+ * feet anchor; `enemyId` references `content/config/enemies.json`.
+ */
+export interface LevelEnemyObject {
+  id?: string;
+  type: 'enemy';
+  x: number;
+  y: number;
+  enemyId: string;
+  patrol: LevelEnemyPatrolBounds;
+}
+
+export type LevelObject = LevelItemObject | LevelEnemyObject;
+
+export function isEnemyObject(object: LevelObject): object is LevelEnemyObject {
+  return object.type === 'enemy';
 }
 
 /**

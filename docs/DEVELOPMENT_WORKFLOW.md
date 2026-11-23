@@ -17,8 +17,9 @@
 4. Write down the acceptance criteria implied by the task, including what is out of scope.
 5. Check Phaser 4 APIs before using them: `node_modules/phaser/types/phaser.d.ts` or
    `node_modules/phaser/skills/<topic>/SKILL.md`. Do not copy Phaser 3 code from memory.
-6. For gameplay changes, identify the config/content involved: `player.json`, `scoring.json`,
-   `level-order.json`, level JSON and the save schema are validated content, not inline constants.
+6. For gameplay changes, identify the config/content involved: `player.json`, `enemies.json`,
+   `combat.json`, `scoring.json`, `level-order.json`, level JSON and the save schema are validated
+   content, not inline constants.
 
 ## 3. Implementation loop
 
@@ -138,6 +139,22 @@ For level/camera work:
 8. Load an unknown ID and confirm the error panel lists available levels and BACK TO MENU works.
 9. Restart the scene repeatedly and compare static/dynamic body counts and text/listener counts.
 
+For enemy/combat work:
+
+1. Load each affected level and confirm enemies render at their feet anchors, patrol within authored
+   bounds, collide with terrain and don't walk off ledges/into water.
+2. Stomp a mushroom from above: one hit, player bounce, score once, no player damage.
+3. Stomp a snail twice: first hit only reduces health, second defeats and scores exactly once.
+4. Land on a spiky enemy: player takes damage, the enemy survives, no score.
+5. Touch an enemy from the side: damage, knockback, flash and input lock; HUD loses one heart.
+6. Repeated contact during invulnerability does not remove more health; after ~1000 ms it can.
+7. Reach health zero: Game Over appears once, no completion bonus/record/unlock is written.
+8. RETRY: full health, all enemies alive, all collectibles restored, run score/counters reset.
+9. Fall into a gap: respawn at spawn, health unchanged, collected objects/score preserved, enemy
+   states preserved.
+10. Finish a level: final score includes coins + collectible stars + enemy points + completion.
+11. Restart several scenes: collider count, enemy set and input-key count stay constant.
+
 For collectible/progression/save work:
 
 1. Confirm coins and collectible stars render at JSON cell centers and inside no solid terrain.
@@ -167,6 +184,8 @@ real-device testing.
 - Place spawn/goal in empty cells directly above solid terrain (bottom-center anchor).
 - Place coins/stars in empty cells (center anchor) above reachable ground/platforms; never inside
   solid terrain.
+- Place enemies in empty cells (feet anchor) with solid ground directly below; author ordered patrol
+  columns that contain the enemy cell and stay over solid ground.
 - Keep rectangles within bounds; one static body per solid area.
 - Prefer reachable geometry (steps ≤ ~100 px, gaps ≤ ~3 tiles with current tuning).
 - Add the level ID to `content/config/level-order.json` when it belongs to the campaign.
@@ -203,8 +222,13 @@ Before handing off, confirm:
 - [ ] Input cleanup: restarting the scene does not duplicate keyboard/pointer listeners or captures.
 - [ ] Levels: all affected IDs load; spawn/terrain/goal/camera and gaps/water/error states verified.
 - [ ] Collectibles: JSON-driven, tile-center anchors, collected once, HUD/score updated once.
-- [ ] Respawn: collected objects/score preserved; Retry starts a fresh run with all collectibles.
-- [ ] Victory: result counts/score/rating correct; settlement runs once; next/final level handled.
+- [ ] Enemies: JSON archetypes/placements, feet anchors, patrol bounds/ledges, terrain collision.
+- [ ] Combat: stomp vs damage exclusive, spiky not stompable, multi-hit enemies, score once.
+- [ ] Health: clamping, 1000 ms invulnerability, knockback/flash/input lock, HUD update on change.
+- [ ] Game Over: transitions once, freezes collection/victory, writes no record, RETRY restores all.
+- [ ] Respawn: health/collected objects/score/enemies preserved; Retry starts a fresh run.
+- [ ] Victory: result counts/score (with enemy points)/rating correct; settlement runs once;
+      next/final level handled.
 - [ ] Progression: explicit order, initial unlock, next unlock, replay allowed, locked rejected.
 - [ ] Save: versioned/validated, survives refresh, best records never shrink, corruption recovered.
 - [ ] Restart: static/dynamic body counts, text objects and listeners stay stable.

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { APP_NAME, GAME_HEIGHT, GAME_WIDTH } from './constants';
 import { BootScene } from '../scenes/BootScene';
 import { MenuScene } from '../scenes/MenuScene';
+import { GameOverScene } from '../scenes/GameOverScene';
 import { GameScene } from '../scenes/GameScene';
 import { ResultScene } from '../scenes/ResultScene';
 import { PALETTE } from '../ui/theme';
@@ -59,7 +60,7 @@ export function createGameConfig(playerConfig: PlayerConfig): Phaser.Types.Core.
         fps: 60,
       },
     },
-    scene: [BootScene, MenuScene, GameScene, ResultScene],
+    scene: [BootScene, MenuScene, GameScene, ResultScene, GameOverScene],
     callbacks: {
       postBoot: (game) => {
         if (!import.meta.env.DEV) {

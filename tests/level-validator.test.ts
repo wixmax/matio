@@ -218,3 +218,88 @@ describe('validateLevel - invalid content', () => {
     expect(errors[0]?.message).toContain('is not valid JSON');
   });
 });
+
+describe('validateLevel - enemy objects', () => {
+  function levelWithEnemy(enemy: Record<string, unknown>): LevelFile {
+    return {
+      ...createValidLevel(),
+      objects: [{ type: 'enemy', x: 5, y: 7, enemyId: 'mushroom', patrol: { minX: 4, maxX: 7 }, ...enemy }],
+    };
+  }
+
+  it('accepts an enemy object with ordered patrol bounds containing its cell', () => {
+    const result = validateLevel(levelWithEnemy({}));
+
+    expect(result.ok).toBe(true);
+
+    if (result.ok) {
+      expect(result.value.objects[0]).toEqual({
+        type: 'enemy',
+        x: 5,
+        y: 7,
+        enemyId: 'mushroom',
+        patrol: { minX: 4, maxX: 7 },
+      });
+    }
+  });
+
+  it('rejects a missing patrol object', () => {
+    const level = levelWithEnemy({});
+    const withoutPatrol = {
+      ...level,
+      objects: [{ type: 'enemy', x: 5, y: 7, enemyId: 'mushroom' }],
+    };
+    const result = validateLevel(withoutPatrol);
+
+    expect(errorPaths(result)).toContain('$.objects[0].patrol');
+  });
+
+  it('rejects unordered patrol bounds', () => {
+    const result = validateLevel(levelWithEnemy({ patrol: { minX: 7, maxX: 4 } }));
+
+    expect(errorPaths(result)).toContain('$.objects[0].patrol.maxX');
+  });
+
+  it('rejects patrol bounds that exclude the enemy cell', () => {
+    const result = validateLevel(levelWithEnemy({ patrol: { minX: 6, maxX: 7 } }));
+
+    expect(errorPaths(result)).toContain('$.objects[0].patrol');
+  });
+
+  it('rejects patrol columns outside the level and non-integer coordinates', () => {
+    const result = validateLevel(levelWithEnemy({ patrol: { minX: -1, maxX: 20.5 } }));
+    const paths = errorPaths(result);
+
+    expect(paths).toContain('$.objects[0].patrol.minX');
+    expect(paths).toContain('$.objects[0].patrol.maxX');
+  });
+
+  it('rejects a missing or non-kebab-case enemyId', () => {
+    expect(errorPaths(validateLevel(levelWithEnemy({ enemyId: undefined })))).toContain(
+      '$.objects[0].enemyId',
+    );
+    expect(errorPaths(validateLevel(levelWithEnemy({ enemyId: 'Mushroom Enemy' })))).toContain(
+      '$.objects[0].enemyId',
+    );
+  });
+
+  it('rejects duplicate IDs shared by an enemy and a collectible', () => {
+    const level: LevelFile = {
+      ...createValidLevel(),
+      objects: [
+        { id: 'shared-id', type: 'coin', x: 3, y: 7 },
+        {
+          id: 'shared-id',
+          type: 'enemy',
+          x: 5,
+          y: 7,
+          enemyId: 'mushroom',
+          patrol: { minX: 4, maxX: 7 },
+        },
+      ],
+    };
+    const result = validateLevel(level);
+
+    expect(errorPaths(result)).toContain('$.objects[1].id');
+  });
+});

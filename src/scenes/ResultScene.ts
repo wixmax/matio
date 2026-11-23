@@ -74,6 +74,20 @@ export class ResultScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
+    addUiText(
+      this,
+      centerX,
+      240,
+      `ENEMIES ${result.enemiesDefeated}/${result.totalEnemies}  ·  ENEMY POINTS ${result.enemyPoints}`,
+      {
+        fontStyle: 'bold',
+        fontSize: '18px',
+        color: toCssColor(PALETTE.mutedText),
+      },
+    )
+      .setOrigin(0.5)
+      .setDepth(2);
+
     this.drawStatRow(296, 'COINS', `${result.collectedCoins} / ${result.totalCoins}`);
     this.drawStatRow(338, 'COLLECTIBLE STARS', `${result.collectedStars} / ${result.totalCollectibleStars}`);
     this.drawStatRow(380, 'SCORE', String(result.score));

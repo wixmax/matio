@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import './styles/main.css';
 import { createGameConfig } from './core/game-config';
 import { installDevErrorOverlay, showBlockingError } from './core/error-overlay';
+import { formatCombatConfigErrors, getCombatConfigResult } from './core/combat-config';
+import { formatEnemiesConfigErrors, getEnemiesConfigResult } from './core/enemies-config';
 import { getLevelOrderResult } from './core/level-order-config';
 import { getLevelRepository } from './core/level-repository';
 import { formatPlayerConfigErrors, getPlayerConfigResult } from './core/player-config';
@@ -13,6 +15,8 @@ installDevErrorOverlay();
 
 const playerConfigResult = getPlayerConfigResult();
 const scoringConfigResult = getScoringConfigResult();
+const enemiesConfigResult = getEnemiesConfigResult();
+const combatConfigResult = getCombatConfigResult();
 const levelOrderResult = getLevelOrderResult();
 const problems: string[] = [];
 
@@ -26,6 +30,14 @@ if (!scoringConfigResult.ok) {
       .map((error) => `${error.path}: ${error.message}`)
       .join('\n')}`,
   );
+}
+
+if (!enemiesConfigResult.ok) {
+  problems.push(`content/config/enemies.json\n${formatEnemiesConfigErrors(enemiesConfigResult.errors)}`);
+}
+
+if (!combatConfigResult.ok) {
+  problems.push(`content/config/combat.json\n${formatCombatConfigErrors(combatConfigResult.errors)}`);
 }
 
 if (!levelOrderResult.ok) {
@@ -55,7 +67,13 @@ if (problems.length > 0) {
 
   console.error(`[Matio] Invalid content configuration:\n${detail}`);
   showBlockingError('Invalid content configuration', detail);
-} else if (playerConfigResult.ok && scoringConfigResult.ok && levelOrderResult.ok) {
+} else if (
+  playerConfigResult.ok &&
+  scoringConfigResult.ok &&
+  enemiesConfigResult.ok &&
+  combatConfigResult.ok &&
+  levelOrderResult.ok
+) {
   const game = new Phaser.Game(createGameConfig(playerConfigResult.value));
 
   exposeGameForDebug(game);

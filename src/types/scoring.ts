@@ -29,6 +29,11 @@ export interface RunCollectibleCounts {
 export interface RunScoreBreakdown {
   readonly coinPoints: number;
   readonly starPoints: number;
+  /**
+   * Enemy defeat points. Omitted when the run has no defeats so a zero-enemy
+   * level keeps the exact pre-Task-005 breakdown shape and total.
+   */
+  readonly enemyPoints?: number;
   readonly completionPoints: number;
   readonly total: number;
 }

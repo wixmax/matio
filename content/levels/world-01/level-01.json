@@ -39,6 +39,30 @@
     { "id": "star-02", "type": "star", "x": 30, "y": 9 },
     { "type": "coin", "x": 31, "y": 11 },
     { "id": "shield-01", "type": "shield", "x": 31, "y": 8 },
-    { "type": "coin", "x": 35, "y": 11 }
+    { "type": "coin", "x": 35, "y": 11 },
+    {
+      "id": "mushroom-01",
+      "type": "enemy",
+      "enemyId": "mushroom",
+      "x": 12,
+      "y": 12,
+      "patrol": { "minX": 12, "maxX": 16 }
+    },
+    {
+      "id": "snail-01",
+      "type": "enemy",
+      "enemyId": "snail",
+      "x": 21,
+      "y": 12,
+      "patrol": { "minX": 20, "maxX": 23 }
+    },
+    {
+      "id": "mushroom-02",
+      "type": "enemy",
+      "enemyId": "mushroom",
+      "x": 32,
+      "y": 12,
+      "patrol": { "minX": 32, "maxX": 33 }
+    }
   ]
 }

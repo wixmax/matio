@@ -21,6 +21,12 @@ export interface DebugHudState {
   readonly stars: number;
   readonly totalStars: number;
   readonly score: number;
+  readonly health: number;
+  readonly maxHealth: number;
+  readonly invulnerable: boolean;
+  readonly enemiesDefeated: number;
+  readonly totalEnemies: number;
+  readonly enemyPoints: number;
   readonly gameplayState: string;
 }
 
@@ -58,6 +64,8 @@ export class DebugHud {
       `coyote ${state.coyoteAvailable ? 'yes' : 'no'}   buffer ${state.jumpBuffered ? 'yes' : 'no'}`,
       `input ${formatSigned(state.moveX)}   respawns ${state.respawns}`,
       `coins ${state.coins}/${state.totalCoins}   stars ${state.stars}/${state.totalStars}`,
+      `health ${state.health}/${state.maxHealth}   invulnerable ${state.invulnerable ? 'yes' : 'no'}`,
+      `enemies ${state.enemiesDefeated}/${state.totalEnemies}   enemy score ${state.enemyPoints}`,
       `score ${state.score}   state ${state.gameplayState}`,
     ].join('\n');
 

@@ -1,5 +1,6 @@
 import type { LevelObjectType, TerrainType } from './level';
 import type { CollectibleCounts, CollectiblePlacement } from './collectible';
+import type { EnemyPlacement } from './enemy';
 import type { ValidationError } from './validation';
 
 /**
@@ -56,6 +57,8 @@ export interface LevelGeometry {
   /** Coin/star objects converted to tile-center pixel positions. */
   readonly collectibles: readonly CollectiblePlacement[];
   readonly collectibleTotals: CollectibleCounts;
+  /** Enemy objects converted to feet anchors and patrol pixel bounds. */
+  readonly enemies: readonly EnemyPlacement[];
 }
 
 /**

@@ -33,14 +33,46 @@ export function computeRunScore(
   };
 }
 
-/** Score earned by collected objects only; the completion bonus is not added. */
+/**
+ * Final score including enemy defeat points (Task 005).
+ *
+ * `enemyPoints` is the already-validated sum recorded by `EnemyLedger`; it is
+ * not a second mutable score. When it is zero the returned object intentionally
+ * omits the field, so zero-enemy levels produce the exact same breakdown and
+ * total as before this milestone.
+ */
+export function computeRunScoreWithEnemies(
+  counts: RunCollectibleCounts,
+  enemyPoints: number,
+  config: ScoringConfig,
+): RunScoreBreakdown {
+  const coins = normalizeCount(counts.coins);
+  const stars = normalizeCount(counts.stars);
+  const enemies = normalizeCount(enemyPoints);
+
+  const coinPoints = coins * config.points.coin;
+  const starPoints = stars * config.points.star;
+  const completionPoints = config.points.levelComplete;
+  const total = coinPoints + starPoints + enemies + completionPoints;
+
+  return enemies > 0
+    ? { coinPoints, starPoints, enemyPoints: enemies, completionPoints, total }
+    : { coinPoints, starPoints, completionPoints, total };
+}
+
+/**
+ * Score earned by collected objects and defeated enemies only; the completion
+ * bonus is not added. Used by the HUD and the Game Over screen.
+ */
 export function computeCollectedPoints(
   counts: RunCollectibleCounts,
   config: ScoringConfig,
+  enemyPoints = 0,
 ): number {
   return (
     normalizeCount(counts.coins) * config.points.coin +
-    normalizeCount(counts.stars) * config.points.star
+    normalizeCount(counts.stars) * config.points.star +
+    normalizeCount(enemyPoints)
   );
 }
 

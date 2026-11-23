@@ -18,6 +18,7 @@ export const SCENE_KEYS = {
   MENU: 'MenuScene',
   GAME: 'GameScene',
   RESULT: 'ResultScene',
+  GAME_OVER: 'GameOverScene',
 } as const;
 
 export type SceneKey = (typeof SCENE_KEYS)[keyof typeof SCENE_KEYS];

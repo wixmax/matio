@@ -81,6 +81,54 @@
     { "type": "coin", "x": 81, "y": 14 },
     { "type": "coin", "x": 84, "y": 13 },
     { "id": "star-04", "type": "star", "x": 86, "y": 12 },
-    { "type": "coin", "x": 88, "y": 13 }
+    { "type": "coin", "x": 88, "y": 13 },
+    {
+      "id": "mushroom-01",
+      "type": "enemy",
+      "enemyId": "mushroom",
+      "x": 3,
+      "y": 14,
+      "patrol": { "minX": 3, "maxX": 4 }
+    },
+    {
+      "id": "snail-01",
+      "type": "enemy",
+      "enemyId": "snail",
+      "x": 9,
+      "y": 14,
+      "patrol": { "minX": 9, "maxX": 10 }
+    },
+    {
+      "id": "mushroom-02",
+      "type": "enemy",
+      "enemyId": "mushroom",
+      "x": 28,
+      "y": 14,
+      "patrol": { "minX": 28, "maxX": 29 }
+    },
+    {
+      "id": "spiky-01",
+      "type": "enemy",
+      "enemyId": "spiky",
+      "x": 34,
+      "y": 14,
+      "patrol": { "minX": 34, "maxX": 35 }
+    },
+    {
+      "id": "mushroom-03",
+      "type": "enemy",
+      "enemyId": "mushroom",
+      "x": 54,
+      "y": 14,
+      "patrol": { "minX": 54, "maxX": 55 }
+    },
+    {
+      "id": "spiky-02",
+      "type": "enemy",
+      "enemyId": "spiky",
+      "x": 63,
+      "y": 14,
+      "patrol": { "minX": 62, "maxX": 63 }
+    }
   ]
 }

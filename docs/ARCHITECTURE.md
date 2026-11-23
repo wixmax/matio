@@ -29,15 +29,18 @@ content/config/           Validated gameplay config (player.json)
 src/core/                 Composition root: game config, constants, level catalog/order,
                           scoring/save singletons, dev bridge
 src/scenes/               Boot, Menu, Game and Result scenes (lifecycle/orchestration)
-src/entities/             Player, Collectible and procedural placeholder textures
+src/entities/             Player, Collectible, Enemy and procedural placeholder textures
 src/systems/              Pure rules + Phaser-aware orchestration:
                           validators, scoring, progression, save, jump rules, geometry,
-                          LevelRepository, LevelLoader, CollectionSystem
-src/factories/            Phaser construction: terrain, backdrop, goal marker, collectibles
+                          combat rules, player health, patrol behavior, enemy ledger,
+                          LevelRepository, LevelLoader, CollectionSystem, EnemySystem
+src/factories/            Phaser construction: terrain, backdrop, goal marker,
+                          collectibles and enemies
 src/input/                Unified keyboard/touch input and pure input resolution
 src/ui/components/        Reusable UI: text, button, HUD, header, debug/error panels
 src/ui/screens/           Future composed UI screens (pause, shop)
-src/types/                Phaser-free contracts (level, collectible, scoring, save, result, ...)
+src/types/                Phaser-free contracts (level, collectible, enemy, combat,
+                          scoring, save, result, game over, ...)
 src/utils/                Small helpers
 src/styles/               Global page CSS
 tests/                    Vitest suites and content checks
@@ -49,7 +52,8 @@ Import direction:
 
 ```text
 core -> scenes -> entities + input + ui + systems + factories + types
-systems/LevelLoader + CollectionSystem -> factories + entities + systems + types
+systems/LevelLoader + CollectionSystem + EnemySystem
+        -> factories + entities + systems + types
                                                       (Phaser-aware orchestration)
 systems (pure) -> types
 factories -> types + ui/theme + systems geometry
@@ -58,8 +62,9 @@ types -> (nothing, no Phaser)
 ```
 
 `types/` never imports Phaser. `LevelRepository`, `level-geometry`, validators, scoring, progression,
-save rules and jump rules stay engine-free. `LevelLoader`, `CollectionSystem` and the factories are
-the only Phaser-heavy systems/factories.
+save rules, jump rules, combat rules, player health, patrol behavior and the enemy ledger stay
+engine-free. `LevelLoader`, `CollectionSystem`, `EnemySystem` and the factories are the only
+Phaser-heavy systems/factories.
 
 ## 3. Scene lifecycle
 
@@ -72,21 +77,29 @@ Phaser boot
          resolve level ID (?level= in dev, else scene data/default)
          getLevelRepository() -> getLevel(id)
          reject locked IDs through normal navigation (dev selector bypasses)
-         loadLevel(scene, level) -> geometry + terrain + goal sensor + collectibles
+         loadLevel(scene, level) -> geometry + terrain + goal sensor +
+                                    collectibles + enemies
          startPlayableLevel(...)
          OR showLevelError(failure) and return
        update():
-         input -> player.tick -> fall/respawn -> debug HUD
-       goal overlap:
-         playing -> completing -> settle score/save once -> ResultScene(data)
-       shutdown:
-         destroy CollectionSystem/InputManager, stop camera follow, clear references
-  └─ ResultScene: RETRY / NEXT LEVEL / MAIN MENU -> GameScene or MenuScene
+          input -> player.tick -> enemySystem.update -> fall/respawn -> debug HUD
+        player/enemy collider:
+          playing -> stomp (enemy damage/bounce/score)
+                   OR damage (health/knockback/invulnerability)
+                   health 0 -> gameover once -> GameOverScene(data)
+        goal overlap:
+          playing -> completing -> settle score/save once -> ResultScene(data)
+        shutdown:
+          destroy EnemySystem/CollectionSystem/InputManager, stop camera follow,
+          clear references
+   └─ ResultScene: RETRY / NEXT LEVEL / MAIN MENU -> GameScene or MenuScene
+   └─ GameOverScene: RETRY / MAIN MENU -> GameScene or MenuScene (no saves)
 ```
 
 `scene.start()` stops the previous scene. A successful `GameScene` owns one Player, one
-InputManager, one CollectionSystem, one collider set and one camera follow target. An error state
-owns no gameplay systems and shows only a blocking error panel with BACK TO MENU.
+InputManager, one PlayerHealth, one CollectionSystem, one EnemySystem, one collider/overlap set and
+one camera follow target. An error state owns no gameplay systems and shows only a blocking error
+panel with BACK TO MENU. A failed run never writes a level record or unlocks a level.
 
 ## 4. Level architecture and data flow
 
@@ -103,14 +116,17 @@ core/level-repository  ──►  systems/LevelRepository
                             tile→px, spawn/goal anchors, camera frame
                                   │
                             systems/LevelLoader
-                     ┌────────────┼─────────────┐
-                     ▼            ▼             ▼
+                     ┌────────────┼─────────────┬──────────────┐
+                     ▼            ▼             ▼              ▼
               BackdropFactory TerrainFactory GoalMarkerFactory CollectibleFactory
                                   |              | (visual+sensor)  | (group)
                           solids[] (static)      |                  |
                                   |              |                  |
+                                  |       EnemyFactory (group, ground rects)
+                                  |              |
                           GameScene wiring: Player, colliders, overlaps,
-                          CollectionSystem, world bounds, camera, input, HUD
+                          CollectionSystem, EnemySystem, PlayerHealth,
+                          world bounds, camera, input, HUD
 ```
 
 ### LevelRepository (`src/systems/LevelRepository.ts`)
@@ -127,13 +143,15 @@ core/level-repository  ──►  systems/LevelRepository
 
 ### LevelLoader (`src/systems/LevelLoader.ts`)
 
-- Accepts a validated `LevelDefinition`.
+- Accepts a validated `LevelDefinition` plus the validated enemy registry.
 - Rejects a spawn cell that overlaps solid terrain (`unsafe-spawn`) before creating anything.
-- Builds geometry, backdrop, terrain, goal marker/sensor and coin/star instances.
-- Returns `LevelRuntime` with geometry, solid bodies, goal runtime, collectibles, backdrop and the
-  unimplemented-object report.
-- Does not create the player, input, camera, HUD, colliders or overlaps.
-- Logs ignored `bomb`/`shield`/`magnet` objects and collectible totals in development.
+- Cross-checks every enemy placement against the registry and terrain safety before instantiating
+  anything; unknown archetypes or unsafe cells return an `invalid-level` failure with field paths.
+- Builds geometry, backdrop, terrain, goal marker/sensor, coin/star and enemy instances.
+- Returns `LevelRuntime` with geometry, solid bodies, goal runtime, collectibles, enemies, backdrop
+  and the unimplemented-object report.
+- Does not create the player, input, camera, HUD or player-facing colliders/overlaps.
+- Logs ignored `bomb`/`shield`/`magnet` objects, collectible totals and enemy counts in development.
 
 ### TerrainFactory (`src/factories/TerrainFactory.ts`)
 
@@ -150,14 +168,30 @@ core/level-repository  ──►  systems/LevelRepository
 - Bodies have gravity disabled and are immovable: pickup only, never a blocking obstacle.
 - Procedural textures live in `entities/collectible-textures.ts` and can be replaced by an atlas.
 
+### EnemyFactory (`src/factories/EnemyFactory.ts`)
+
+- One `Enemy` sprite per validated placement; one dynamic physics group per level.
+- Resolves archetype tuning from `content/config/enemies.json` (never inline in the entity).
+- Passes solid terrain rectangles for allocation-free ledge probes.
+- Procedural textures live in `entities/enemy-textures.ts`, keyed `matio-enemy-<archetype>`.
+
+### EnemySystem (`src/systems/EnemySystem.ts`)
+
+- Owns the enemy/terrain collider, the player/enemy collider, patrol updates and the defeat ledger.
+- Classifies each contact once with `combat-rules.classifyEnemyContact`.
+- Freezes combat on victory/game over and destroys its colliders on scene shutdown.
+- Emits HUD events (`onChanged`, `onPlayerDamaged`) and the terminal `onPlayerDefeated`.
+- Never writes save data.
+
 ### GameScene
 
 - Selects the level and renders a load error when necessary.
-- Creates the Player at the JSON feet anchor.
+- Creates the Player at the JSON feet anchor, one `PlayerHealth`, collectibles and enemies.
 - Configures world/physics/camera bounds from the level dimensions.
-- Registers one player/terrain collider.
-- Handles fall respawn and the development R shortcut.
-- Never contains level layout data.
+- Registers player/terrain collision, collection/goal overlaps and delegates enemy combat to
+  `EnemySystem`.
+- Handles fall respawn, the development R shortcut, victory settlement and Game Over transition.
+- Never contains level layout data or combat classification rules.
 
 ## 5. Display and game configuration
 
@@ -223,28 +257,39 @@ interface PlayerInputState {
 
 ## 9. Player
 
-Unchanged from Task 002: Arcade Sprite, acceleration/drag/max velocity, variable jump, coyote,
-buffer, jump-cut, double-jump protection and procedural visual states. The entity receives only
-`PlayerInputState`. Movement tuning remains in `content/config/player.json`.
+Arcade Sprite with acceleration/drag/max velocity, variable jump, coyote, buffer, jump-cut,
+double-jump protection and procedural visual states. The entity receives only `PlayerInputState`.
+Movement tuning remains in `content/config/player.json`.
+
+Task 005 adds damage presentation only: `bounce()`, `applyKnockback()`, `stun()` (a short input lock)
+and `startDamageFlash()`. Hit points and invulnerability remain in the engine-free `PlayerHealth`
+model (`systems/player-health.ts`); the Player never decides how much damage it takes.
 
 ## 10. External configuration and content
 
 - `content/config/player.json` imports at build time, is validated, and controls movement/gravity.
+- `content/config/enemies.json` defines archetype balance (health, speed, behavior, stompable,
+  damage, score) and is validated before the game starts.
+- `content/config/combat.json` defines max/starting health, invulnerability, knockback, input lock,
+  damage flash, stomp bounce and top-contact tolerance.
 - `content/levels/**/*.json` is discovered by eager raw glob; editing/adding JSON requires only a
   reload/rebuild. Adding `level-04.json` needs no TypeScript changes.
-- Object definitions are validated but ignored in Task 003; development diagnostics report counts.
+- Enemy placements reference an archetype by ID; LevelLoader rejects unknown IDs or unsafe cells.
+- Valid-but-unimplemented objects (`bomb`/`shield`/`magnet`) remain ignored with dev diagnostics.
 - Invalid content never silently falls back to a different level.
 
 ## 11. UI, debug and errors
 
 - `LevelHeader` shows level name/ID/size and controls, fixed to the camera.
-- `GameHud` (production + dev) shows level name, coin/star counters and collected points. It is
-  camera-fixed (`scrollFactor(0)`) and only rewrites text when a counter changes.
-- `ResultScene` is a separate scene fed with plain data: counts, score, rating, best records and next
-  level. RETRY/NEXT LEVEL/MAIN MENU use `TextButton` (shared mouse/touch path) and a local transition
-  guard.
+- `GameHud` (production + dev) shows level name, coin/star counters, collected points and player
+  health hearts. It is camera-fixed (`scrollFactor(0)`) and only rewrites text when a value changes.
+- `ResultScene` is a separate scene fed with plain data: counts, enemy defeats/points, score, rating,
+  best records and next level. RETRY/NEXT LEVEL/MAIN MENU use `TextButton` (shared mouse/touch path)
+  and a local transition guard.
+- `GameOverScene` is a separate scene fed with plain data. It offers RETRY and MAIN MENU only, shows
+  the run score without the completion bonus and states that no record was saved.
 - `DebugHud` (dev only) adds scroll, velocity, grounded/visual/coyote/buffer, input, respawns,
-  collectible counts, score and gameplay state.
+  collectible counts, health/invulnerability, enemy defeats/points, score and gameplay state.
 - `LevelErrorPanel` is a blocking screen with the requested ID, error code, message, field paths and
   BACK TO MENU. It is used for unknown/invalid/duplicate/unsafe/locked/load failures.
 - All text uses the DPR-aware text factory. Theme colors live in `ui/theme.ts`.
@@ -254,26 +299,28 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
 ## 12. Cleanup and restarts
 
 - Phaser destroys display-list objects, physics bodies and colliders on scene shutdown; the scene does
-  not manually destroy them (avoids double destruction).
-- `GameScene.handleShutdown` destroys `CollectionSystem`, the goal overlap collider and
-  `InputManager`, guards camera teardown order (`this.cameras?.main?.stopFollow()`), and clears its
-  own references.
+  not manually destroy gameplay display objects.
+- `GameScene.handleShutdown` destroys `EnemySystem` (its two colliders), `CollectionSystem`, the goal
+  overlap, `InputManager`, guards camera teardown order (`this.cameras?.main?.stopFollow()`) and
+  clears its own references.
 - The loader is synchronous, so a late async result cannot mutate a dead scene.
-- Retry starts a new GameScene, which creates a fresh run ledger and new collectible instances. No
-  run state is carried through the Phaser scene registry.
-- Verified: restarts do not duplicate bodies/listeners; collected objects and save records behave as
-  documented.
+- Retry (result or Game Over) starts a new GameScene, which creates fresh enemies, collectibles,
+  ledgers and health. No run state is carried through the Phaser scene registry.
+- Verified: repeated scene transitions keep exactly five colliders, eight input keys, one enemy set
+  and full health; collected objects and save records behave as documented.
 
 ## 13. Testing
 
-- 17 Vitest files, 156 tests: level validation, player config, input resolution, jump controller,
+- 24 Vitest files, 233 tests: level validation, player config, input resolution, jump controller,
   level geometry/camera frame, collectible geometry/content, collection ledger, scoring/rating,
   scoring config, level order/progression, level launch policy, save validation/progress/store,
-  gameplay state, level repository and level selector.
-- Repository/content tests read all shipped levels and assert validity, unique IDs and that no
-  collectible is authored inside solid terrain.
-- Phaser construction, camera/input, collection overlap, victory and save persistence are verified in
-  a real browser; Phaser is not mocked.
+  gameplay state, level repository/selector, enemy config, enemy placement safety, patrol behavior,
+  stomp classification, player health/invulnerability, enemy ledger and combat config.
+- Repository/content tests read all shipped levels and assert validity, unique IDs, no collectible
+  inside solid terrain, valid enemy archetypes, ordered patrols and solid ground below enemies.
+- Phaser construction, camera/input, collection overlap, victory, enemy stomps, player damage,
+  invulnerability, Game Over and save persistence are verified in a real browser; Phaser is not
+  mocked.
 - Background/occluded Chromium tabs throttle `requestAnimationFrame`, so deterministic browser checks
   stop `game.loop` and call `game.step(time, 16.666)` manually. This is test instrumentation only.
 
@@ -289,20 +336,74 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
   star ring) and `freeze()` for victory.
 - Respawn keeps the ledger and already-collected objects. Retry creates a new scene/ledger.
 
-## 15. Score, rating and victory settlement
+## 15. Enemies, health and combat
+
+### Enemy data and lifecycle
+
+- `content/config/enemies.json` (schema 1) is validated by `validateEnemiesConfig()` before boot.
+  Each archetype owns health, speed, behavior, stompable, contact damage and defeat score.
+- Level objects of type `enemy` reference an archetype and include inclusive patrol tile columns.
+  The structural validator checks types/bounds/order; LevelLoader cross-checks the registry and
+  terrain (empty cell, solid ground below) before creating anything.
+- `EnemyFactory` creates one dynamic `Enemy` per placement in one group; `EnemySystem` owns both
+  colliders (enemy/terrain first, player/enemy second).
+- `Enemy` owns health, alive state, patrol velocity and placeholder visuals. A defeated enemy
+  disables its body immediately and fades out; dead enemies cannot damage or be scored twice.
+- `EnemyLedger` records each defeat key once. `EnemySystem` converts it into score contributions;
+  there is no second independent score accumulator.
+
+### Patrol behavior
+
+`systems/enemy-behaviors.ts` is pure and deterministic. A patrol step reverses at:
+1. an Arcade `blocked` wall, then
+2. the authored body-edge patrol bounds, then
+3. a missing ground probe ahead while grounded (ledge/water safety).
+
+The probe checks the level's solid pixel rectangles, so it allocates nothing per frame. Enemies use
+Arcade velocity only; they never teleport, chase, jump or fly.
+
+### Contact classification
+
+`systems/combat-rules.ts` classifies each contact once:
+
+- **stomp** requires `enemy.stompable`, downward movement this step (`body.deltaY() > 0` or positive
+  velocity) and the previous-step player body bottom at/above the enemy body top within the configured
+  tolerance. Arcade separation may zero velocity before the callback, so previous geometry is used.
+- **damage** is every other contact, including side/rising hits, near-edge side hits and any contact
+  with a non-stompable enemy (spiky). A stomp and damage never both apply to one contact.
+
+A stomp deals exactly one damage, bounces the player with `combat.stomp.bounceVelocity`, and awards
+defeat score only when health reaches zero. A two-health snail therefore requires two stomps.
+Spiky health is reserved for future combat methods and is not reduced by stomping in this milestone.
+
+### Player health and feedback
+
+- `systems/player-health.ts` is Phaser-free: integer health clamped to `0..maxHealth`, 1000 ms
+  invulnerability, explicit `tick(deltaMs)`, and a full reset for a fresh attempt.
+- A damaging contact applies knockback away from the enemy, a short configurable input lock, a damage
+  flash and a HUD update. Repeated contact frames cannot drain health during invulnerability.
+- Health 0 flips gameplay to `gameover` once, freezes collection/combat and starts `GameOverScene`.
+  A failed run writes no record, grants no completion bonus and unlocks nothing. RETRY starts a new
+  scene with full health, all enemies and all collectibles.
+- Falling remains Task 004 policy: respawn at the JSON spawn, no health loss, collected objects and
+  run points preserved, enemy states preserved, velocity/jump timers reset.
+
+## 16. Score, rating and victory settlement
 
 - `content/config/scoring.json` is validated by `validateScoringConfig()` at startup:
   coin 100, collectible star 500, completion 1000, 2-star coin ratio 0.7.
-- `computeRunScore()` and `computeRatingStars()` are pure and Phaser-free. The HUD shows collected
-  points without the completion bonus; the result uses the final score including the bonus.
-- Rating (1..3) is separate from collectible stars. 3 stars requires non-empty coin AND collectible
-  star sets and collection of all of them; 2 stars requires the configured coin ratio; otherwise 1.
-  Empty levels cannot receive a perfect rating by vacuous truth.
+- `computeRunScore()` and `computeRatingStars()` are pure and Phaser-free.
+  `computeRunScoreWithEnemies()` adds the enemy contribution; with zero enemy points it returns the
+  exact pre-Task-005 breakdown and total. The HUD shows collected + enemy points without the
+  completion bonus; the result uses the final score including the bonus.
+- Rating (1..3) is separate from collectible stars and unchanged by enemy defeats. 3 stars requires
+  non-empty coin AND collectible star sets and collection of all of them; 2 stars requires the
+  configured coin ratio; otherwise 1. Empty levels cannot receive a perfect rating by vacuous truth.
 - The goal marker gains a non-solid static sensor zone. Goal overlap flips the scene state to
-  `completing` synchronously, destroys gameplay input, freezes collection, computes score/rating,
-  updates the save once and starts `ResultScene` with plain data.
+  `completing` synchronously, destroys gameplay input, freezes collection/enemies, computes
+  score/rating, updates the save once and starts `ResultScene` with plain data.
 
-## 16. Progression and save data
+## 17. Progression and save data
 
 - `content/config/level-order.json` is the only campaign order. It is structurally validated and
   cross-checked against discovered level IDs at startup.
@@ -318,7 +419,7 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
 - Best records are monotonic (`Math.max` per field). Settlement is idempotent. No wallet/currency is
   implemented in this milestone.
 
-## 17. Android / Capacitor considerations
+## 18. Android / Capacitor considerations
 
 - `base: './'` build works from a WebView/file origin.
 - Levels and player config are bundled; no server or Node APIs at runtime.
@@ -326,7 +427,7 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
 - Camera zoom stays 1 to keep touch hit-testing assumptions valid.
 - WebAudio still needs a first user gesture; START GAME is the natural unlock.
 
-## 18. Decision log
+## 19. Decision log
 
 | Decision | Reason |
 | --- | --- |
@@ -353,8 +454,17 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
 | Fall margin 2 tiles | Explicit level-relative value, not a screen constant |
 | Keep gameplay systems out of error state | No partial invalid world |
 | Dev query selector only in dev | No user-facing level menu yet; production is deterministic |
+| Enemies use bottom-center feet anchors | Same convention as the player/spawn; no second coordinate system |
+| Patrol bounds are tile columns expanded to body-edge pixels | Authored in level units while collisions stay in pixels |
+| Previous-step body bottom for stomp detection | Arcade separation can zero velocity; current Y alone is brittle |
+| Stomp and damage are one exclusive branch | One contact can never both defeat an enemy and hurt the player |
+| Spiky is damage-only in Task 005 | Keeps combat methods (bombs/projectiles) out of this milestone |
+| Enemy score in `EnemyLedger`, merged by the scoring module | One run-score authority; no divergent accumulator |
+| Zero-enemy breakdown omits `enemyPoints` | Preserves exact pre-Task-005 score/format for old levels |
+| Explicit `GameOverScene` with no next level | Terminal failure cannot accidentally unlock or save progression |
+| Per-enemy procedural texture key | Final sprites can replace placeholders without touching the entity |
 
-## 19. Known risks
+## 20. Known risks
 
 1. Phaser 4 is young; verify APIs against bundled types/skills.
 2. Canvas fallback was not exercised.
@@ -364,9 +474,14 @@ buffer, jump-cut, double-jump protection and procedural visual states. The entit
    and production save write were not replayed because the dev bridge is intentionally absent.
 6. Level content is bundled; no runtime level editing/hot reload beyond Vite.
 7. Camera zoom is fixed at 1; `TouchControlButton.isPointerWithin` assumes zoom 1.
-8. Bomb/shield/magnet object definitions remain valid but unimplemented.
-9. Level design is placeholder and not tuned by a designer; collectible reachability was checked
+8. Bomb/shield/magnet object definitions remain valid but unimplemented; spiky has no defeat method
+   yet, so its configured score of 0 is not used.
+9. Level design is placeholder and not tuned by a designer; collectible/enemy reachability was checked
    against the jump arc and solid-cell validation, not exhaustively played on a device.
 10. Eager glob loads all level JSON at startup (acceptable now; revisit for large catalogs).
 11. Persistent currency, shop and replay-farming rewards are intentionally absent.
 12. Save data is local-only; clearing site data removes progress.
+13. Enemy and stomp balance (speeds, tolerance, knockback) is placeholder and only unit/browser
+    verified, not play-tested on mid-range Android hardware.
+14. Enemies do not respawn after falling below the world; shipped patrol bounds prevent this, but
+    future content must keep enemies on solid ground.

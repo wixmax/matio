@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "enemies": {
+    "mushroom": {
+      "health": 1,
+      "speed": 55,
+      "behavior": "patrol",
+      "stompable": true,
+      "damage": 1,
+      "score": 200
+    },
+    "snail": {
+      "health": 2,
+      "speed": 30,
+      "behavior": "patrol",
+      "stompable": true,
+      "damage": 1,
+      "score": 350
+    },
+    "spiky": {
+      "health": 1,
+      "speed": 40,
+      "behavior": "patrol",
+      "stompable": false,
+      "damage": 1,
+      "score": 0
+    }
+  }
+}

@@ -43,6 +43,14 @@ export const PALETTE = {
   player: 0xff6b6b,
   playerDark: 0xc94a4a,
 
+  enemyMushroom: 0xe8544f,
+  enemyMushroomDark: 0xb43532,
+  enemySnail: 0x7ccf8e,
+  enemySnailDark: 0x3f8f55,
+  enemySpiky: 0x8b5fbf,
+  enemySpikyDark: 0x5b3a84,
+  enemyFallback: 0xffa64d,
+
   mutedText: 0xdfe9f5,
 } as const;
 

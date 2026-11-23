@@ -169,7 +169,26 @@ logos or recognizable third-party IP.
 - Name files by action/object, not by number: `sfx-coin-pickup`, not `sfx-01`.
 - Respect mobile autoplay rules: audio starts only after the first user gesture.
 
-## 8. Placeholder policy
+## 8. Enemy placeholders and sprite replacement
+
+Task 005 draws enemies procedurally in `src/entities/enemy-textures.ts`. Each archetype gets the key
+`matio-enemy-<archetypeId>` (for example `matio-enemy-mushroom`). The placeholder frame is 64×64 with
+a 44×44 body at offset (10,20); origin is (0.5,1) so `enemy.y` is the feet anchor.
+
+Replacing placeholders with final art:
+
+1. Keep the same texture key for the archetype, or preload an atlas/spritesheet under that key.
+   `ensureEnemyTexture()` skips generation when the key already exists.
+2. Final frames should follow this guide (128×128 standard, feet at bottom center with a small
+   safety margin). Update `ENEMY_BODY`/frame constants and the entity together if the frame size
+   changes, so the body bottom stays exactly at the feet.
+3. If animations are added, keep the feet pivot identical across every frame; gameplay body metrics
+   must not change per frame.
+4. A new JSON archetype without final art automatically receives a generic placeholder, which is
+   acceptable for prototypes but must be replaced before release.
+5. Do not bake shadows, UI, text or backgrounds into enemy sprites.
+
+## 9. Placeholder policy
 
 Until a task explicitly introduces final art:
 

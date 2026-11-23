@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "player": {
+    "maxHealth": 3,
+    "startingHealth": 3,
+    "invulnerabilityMs": 1000,
+    "knockbackVelocityX": 280,
+    "knockbackVelocityY": -320,
+    "inputLockMs": 160,
+    "damageFlashDurationMs": 700,
+    "damageFlashIntervalMs": 110
+  },
+  "stomp": {
+    "bounceVelocity": -420,
+    "topContactTolerancePx": 18
+  }
+}

@@ -9,9 +9,10 @@ technical architect reviews each task. Read this file before doing anything.
   **Vitest 5.1.1**, npm, JSON content, Phaser Arcade Physics.
 - Logical resolution 1280×720, landscape-first, FIT scaling, WebGL with Canvas fallback.
 - No React/Vue/Angular/Next.js, no backend, no authentication, no database, no cloud services.
-- Current milestone: **Task 004 complete** — JSON-driven levels, terrain/collision generation,
-  goal marker, camera follow, collectibles, goal completion, scoring/rating, level progression,
-  result screen and versioned local save. Enemies and combat are next.
+- Current milestone: **Task 005 complete** — JSON-driven levels, terrain/collision generation,
+  goal marker, camera follow, collectibles, scoring/rating, progression, local save, plus JSON
+  enemy archetypes, patrol behavior, stomp/damage combat, player health/invulnerability and a
+  Game Over/retry flow. Bombs/projectiles/shields/magnets remain future work.
 
 ## Mandatory rules
 
@@ -112,6 +113,19 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
   the scene. Movement uses Arcade velocity/acceleration; never move the player by editing `x`/`y`.
 - Sprite origin is (0.5, 1) with the body offset defined in `src/entities/player-textures.ts`. Keep
   body metrics and frame sizes consistent when changing visuals.
+- Enemy balance lives only in `content/config/enemies.json`; placements live in level JSON.
+  Enemy entities must not hardcode health, speed, damage or score.
+- Combat tuning (health, invulnerability, knockback, stomp bounce/tolerance) lives only in
+  `content/config/combat.json`. Combat classification belongs in `src/systems/combat-rules.ts`,
+  health rules in `src/systems/player-health.ts`, and patrol in `src/systems/enemy-behaviors.ts`.
+- Never classify stomps from velocity alone: Arcade separation can zero velocity before the
+  callback. Use previous-step body geometry plus current enemy geometry.
+- The player/enemy contact handler is exclusive: one contact resolves as either a stomp or player
+  damage, never both. Defeated enemies disable their body immediately.
+- Enemy defeat points are recorded once by `EnemyLedger` and merged into the existing scoring
+  functions; never add a second mutable score total.
+- A failed run (health 0) must not write a save record or unlock a level. `GameOverScene` offers
+  RETRY and MAIN MENU only.
 - Level layouts exist only in `content/levels/**/*.json`; never add level arrays or coordinates to
   scenes/factories. Discovery is the eager raw `import.meta.glob` in `src/core/level-repository.ts`.
 - Load levels through `LevelRepository` → `loadLevel` → `createLevelGeometry`. Do not use `fetch`,
@@ -121,7 +135,10 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
 - Every solid area gets one static body; `water` is intentionally non-solid. Do not add per-tile
   bodies or move players manually during physics updates.
 - Collectible objects use the **center** of their JSON cell: `(x + 0.5) · tileSize`,
-  `(y + 0.5) · tileSize`. Spawn/goal remain bottom-center.
+  `(y + 0.5) · tileSize`. Spawn/goal/enemy remain bottom-center.
+- Enemy patrol `minX`/`maxX` are inclusive tile columns converted to body-edge pixels:
+  `minX · tileSize .. (maxX + 1) · tileSize`. Enemies must start in an empty cell above solid
+  terrain, and patrol bounds must contain the enemy cell and stay over solid ground.
 - A collectible is collected at most once per run. Keep the entity guard (`Collectible.collect()`)
   and the run ledger (`CollectionLedger`) in place; never update score/HUD from a raw overlap.
 - Falling preserves collected objects and the current run score. Retry must start a new scene and
@@ -168,6 +185,12 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
   ignored at runtime with development diagnostics. Never turn them into coins or award score.
 - `content/config/scoring.json` is versioned (`schemaVersion: 1`) and validated by
   `validateScoringConfig()` before gameplay starts.
+- `content/config/enemies.json` and `content/config/combat.json` are versioned (`schemaVersion: 1`)
+  and validated at startup. Invalid values block the game; never guess defaults.
+- Enemy placements are validated structurally and cross-checked against the archetype registry and
+  terrain safety. Unknown `enemyId`, invalid patrols or unsafe cells must fail visibly.
+- Enemy defeat score is added to the existing run score exactly once per defeat. Zero-enemy levels
+  must keep the exact pre-Task-005 score breakdown. Enemy defeats do not change rating rules.
 - `content/config/level-order.json` is versioned (`schemaVersion: 1`), structurally validated, and
   cross-checked against discovered level IDs at startup. Missing references block the game with a
   visible error.
@@ -189,13 +212,17 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
 - For collectible/progression changes also verify: coin/star collection updates HUD once, falling
   keeps collected objects, Retry restores them, completion settles once, best results never shrink,
   locked levels cannot start through normal UI, and saved progress survives a page refresh.
+- For enemy/combat changes verify: enemy anchors/patrol bounds/terrain collision, one-hit vs two-hit
+  stomps, spiky damage-only, exclusive stomp/damage, invulnerability timing, health HUD, knockback,
+  Game Over exactly once, Retry restoring health/enemies/collectibles, falling preserving health and
+  collection, enemy score once, and victory score including enemy points.
 - Test the production build with `npm run preview` for menu/result/HUD behavior; remember the dev
   bridge and dev level selector are absent there.
 - Force touch controls with `?touch=1` when the test machine has no touchscreen. Synthetic touch
   events verify the Phaser input path, not a real device; say which was used.
 - If a background browser tab throttles `requestAnimationFrame`, stop `game.loop` and call
   `game.step(time, 16.666)` manually for deterministic verification. Do not ship that as logic.
-- Report exact command output (e.g. "156 tests passed", build sizes, console errors), not claims.
+- Report exact command output (test count, build sizes, console errors), not claims.
 - Never describe unexecuted checks as successful.
 
 ## Reporting

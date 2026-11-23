@@ -6,6 +6,7 @@ import {
   TERRAIN_TYPES,
   type GridPoint,
   type LevelDefinition,
+  type LevelEnemyPatrolBounds,
   type LevelObject,
   type LevelSize,
   type LevelTerrainArea,
@@ -26,6 +27,7 @@ import type { ValidationError, ValidationResult } from '../types/validation';
  */
 
 const LEVEL_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ENEMY_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -291,10 +293,73 @@ function readObjects(
       return;
     }
 
+    if (type === 'enemy') {
+      const enemyId = readString(entry, 'enemyId', entryPath, errors, {
+        pattern: ENEMY_ID_PATTERN,
+        patternHint: 'a lowercase kebab-case archetype id from content/config/enemies.json',
+      });
+      const patrol = readEnemyPatrol(entry.patrol, `${entryPath}.patrol`, x, size, errors);
+
+      if (enemyId === undefined || patrol === undefined) {
+        return;
+      }
+
+      objects.push(
+        id === undefined
+          ? { type, x, y, enemyId, patrol }
+          : { id, type, x, y, enemyId, patrol },
+      );
+      return;
+    }
+
     objects.push(id === undefined ? { type, x, y } : { id, type, x, y });
   });
 
   return objects;
+}
+
+/**
+ * Enemy patrol bounds are inclusive tile columns. They must be ordered, inside
+ * the level and contain the enemy's own column so JSON cannot describe an
+ * unreachable/contradictory patrol.
+ */
+function readEnemyPatrol(
+  value: unknown,
+  path: string,
+  enemyX: number,
+  size: LevelSize | undefined,
+  errors: ValidationError[],
+): LevelEnemyPatrolBounds | undefined {
+  if (!isRecord(value)) {
+    errors.push({ path, message: 'is required and must be an object with minX and maxX.' });
+    return undefined;
+  }
+
+  const maxColumn = size === undefined ? undefined : size.width - 1;
+  const minX = readInteger(value, 'minX', path, errors, { min: 0, max: maxColumn });
+  const maxX = readInteger(value, 'maxX', path, errors, { min: 0, max: maxColumn });
+
+  if (minX === undefined || maxX === undefined) {
+    return undefined;
+  }
+
+  if (minX > maxX) {
+    errors.push({
+      path: `${path}.maxX`,
+      message: `must be greater than or equal to patrol.minX (${minX}); received ${maxX}.`,
+    });
+    return undefined;
+  }
+
+  if (enemyX < minX || enemyX > maxX) {
+    errors.push({
+      path,
+      message: `must contain the enemy cell x=${enemyX} (received ${minX}..${maxX}).`,
+    });
+    return undefined;
+  }
+
+  return { minX, maxX };
 }
 
 function readInteger(

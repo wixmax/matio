@@ -13,8 +13,11 @@ export const COLLECTIBLE_TYPES = ['coin', 'star'] as const;
 
 export type CollectibleType = (typeof COLLECTIBLE_TYPES)[number];
 
-/** Object types that remain valid content but have no runtime behavior yet. */
-export type UnimplementedObjectType = Exclude<LevelObjectType, CollectibleType>;
+/**
+ * Object types that remain valid content but have no runtime behavior yet.
+ * Enemy placements are implemented and therefore excluded.
+ */
+export type UnimplementedObjectType = Exclude<LevelObjectType, CollectibleType | 'enemy'>;
 
 /**
  * A validated collectible converted to world pixels.

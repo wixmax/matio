@@ -69,13 +69,16 @@ score feedback, persistent best-collection records. Bombs, shields, magnets and 
 remain planned.
 
 ### Scoring and progression
-Score breakdown (coins, stars, completion), 1–3 star rating, explicit level order, unlock rules,
-versioned local save and a result screen are implemented. Star ratings, advanced breakdowns,
+Score breakdown (coins, collectible stars, enemy defeats, completion), 1–3 star rating, explicit
+level order, unlock rules, versioned local save and a result screen are implemented. Enemy defeats
+add score but are not required for the three-star rating in this milestone. Advanced breakdowns,
 achievements and cloud save remain planned.
 
-### Enemies
-Reusable AI behaviors (patrol, chase, flyer, turret), damage rules, defeat rules and respawn logic
-remain planned.
+### Enemies and combat
+Implemented in Task 005: JSON archetypes (mushroom, snail, spiky), deterministic patrol behavior,
+stomp classification, multi-hit enemies, non-stompable hazards, player health, invulnerability,
+knockback, defeat scoring and a Game Over/retry flow. Still planned: chase/flyer/turret behaviors,
+enemy projectiles, bosses, bombs/projectiles/shields and respawning enemies.
 
 ### Meta systems (later)
 Shop, inventory, achievements, daily quests, daily rewards, lucky spin. These must remain optional
@@ -94,22 +97,25 @@ Original character skins, animation sets, particles, music and sound effects, vi
 
 Details and naming rules live in [ASSET_GUIDE.md](ASSET_GUIDE.md).
 
-## 7. Current milestone (Task 004)
+## 7. Current milestone (Task 005)
 
-Implemented: the full first gameplay loop. Start a level → collect coins/stars → reach the goal →
-calculate score and 1–3 star rating → save best results → unlock the next level → retry, continue or
-return to the menu. Includes a camera-fixed HUD, basic level selection with locked states, a result
-screen, explicit campaign order and versioned localStorage save with validation/recovery.
+Implemented: enemies and player combat. Start a level → navigate deterministic patrol enemies →
+stomp stompable archetypes (snails need two hits) or avoid spiky enemies → take damage, knockback and
+invulnerability on side contact → reach the goal for a score that includes coins, collectible stars,
+enemy defeats and the completion bonus, or lose all health for a non-saving Game Over with Retry.
 
-In scope for this milestone: collectible/coin/star objects, overlap safety, scoring configuration,
-rating policy, goal completion, progression, local persistence, result UI and level selection.
+In scope for this milestone: JSON enemy archetypes and placements, patrol behavior, stomp/damage
+classification, player health/invulnerability, knockback/feedback, a health HUD, defeat scoring,
+Game Over/retry and three populated levels.
 
-Out of scope: enemies, combat, power-ups (bomb/shield/magnet runtime), shop, persistent wallet,
-achievements, daily rewards, Tiled/editor integration, ads, Android packaging and final art/audio.
+Out of scope: bombs, projectiles, shields, magnets, chasing/flying enemies, boss fights, permanent
+lives, power-up inventory, shop, achievements, daily rewards, Tiled/editor integration, ads, Android
+packaging and final art/audio.
 
-Success for this milestone: collectibles are driven by JSON, each is collected once, falling keeps
-collected objects, Retry restores them, victory settles exactly once, best records cannot shrink,
-locked levels stay locked in production, progress survives refresh, and tests/build pass.
+Success for this milestone: enemies are JSON-driven and patrol safely, one contact is either a stomp
+or damage (never both), spiky cannot be stomped, snails need two stomps, score is awarded once per
+defeat, damage respects invulnerability, health zero ends the run once without saving, Retry restores
+health/enemies/collectibles, falling keeps collections and health, and tests/typecheck/build pass.
 
 ### Milestone history
 
@@ -117,6 +123,7 @@ locked levels stay locked in production, progress survives refresh, and tests/bu
 - **Task 002** — player controller, Arcade Physics and unified input.
 - **Task 003** — JSON level repository/loader, terrain/collision generation, goal markers and camera.
 - **Task 004** — collectibles, goal completion, scoring/rating, progression, result screen and save.
+- **Task 005** — enemy archetypes/patrol, stomp combat, player health/damage, health HUD and Game Over.
 
 ## 8. Product success criteria for the first playable
 

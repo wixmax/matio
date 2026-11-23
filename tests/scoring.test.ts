@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { computeCollectedPoints, computeRatingStars, computeRunScore } from '../src/systems/scoring';
+import {
+  computeCollectedPoints,
+  computeRatingStars,
+  computeRunScore,
+  computeRunScoreWithEnemies,
+} from '../src/systems/scoring';
 import type { ScoringConfig } from '../src/types/scoring';
 
 const CONFIG: ScoringConfig = {
@@ -38,6 +43,52 @@ describe('score - deterministic calculation', () => {
     expect(computeRunScore({ coins: 7, stars: 1 }, CONFIG)).toEqual(
       computeRunScore({ coins: 7, stars: 1 }, CONFIG),
     );
+  });
+});
+
+describe('score - enemy defeat rewards', () => {
+  it('is byte-for-byte identical to the old breakdown for zero-enemy levels', () => {
+    expect(computeRunScoreWithEnemies({ coins: 5, stars: 2 }, 0, CONFIG)).toEqual(
+      computeRunScore({ coins: 5, stars: 2 }, CONFIG),
+    );
+    expect(computeRunScoreWithEnemies({ coins: 0, stars: 0 }, 0, CONFIG)).toEqual({
+      coinPoints: 0,
+      starPoints: 0,
+      completionPoints: 1000,
+      total: 1000,
+    });
+  });
+
+  it('adds enemy points once alongside coins, stars and the completion bonus', () => {
+    expect(computeRunScoreWithEnemies({ coins: 5, stars: 2 }, 550, CONFIG)).toEqual({
+      coinPoints: 500,
+      starPoints: 1000,
+      enemyPoints: 550,
+      completionPoints: 1000,
+      total: 3050,
+    });
+  });
+
+  it('normalizes invalid enemy points instead of producing negative totals', () => {
+    expect(computeRunScoreWithEnemies({ coins: 0, stars: 0 }, -500, CONFIG).total).toBe(1000);
+    expect(computeRunScoreWithEnemies({ coins: 0, stars: 0 }, Number.NaN, CONFIG).total).toBe(
+      1000,
+    );
+    expect(computeRunScoreWithEnemies({ coins: 0, stars: 0 }, 200.9, CONFIG).enemyPoints).toBe(200);
+  });
+
+  it('includes enemy points in the HUD collected score without the completion bonus', () => {
+    expect(computeCollectedPoints({ coins: 1, stars: 0 }, CONFIG, 200)).toBe(300);
+    expect(computeCollectedPoints({ coins: 1, stars: 0 }, CONFIG)).toBe(100);
+  });
+
+  it('does not change the rating rules when enemies are defeated', () => {
+    const rating = computeRatingStars(
+      { collectedCoins: 7, totalCoins: 10, collectedStars: 0, totalStars: 2 },
+      CONFIG,
+    );
+
+    expect(rating).toBe(2);
   });
 });
 

@@ -13,7 +13,11 @@ export interface LevelResultData {
   readonly totalCoins: number;
   readonly collectedStars: number;
   readonly totalCollectibleStars: number;
-  /** Final score including the one-time level completion bonus. */
+  readonly enemiesDefeated: number;
+  readonly totalEnemies: number;
+  /** Enemy defeat points included in the final score. */
+  readonly enemyPoints: number;
+  /** Final score including enemy defeats and the level completion bonus. */
   readonly score: number;
   /** Rating for this run (1..3). */
   readonly ratingStars: LevelRating;

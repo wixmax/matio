@@ -3,12 +3,14 @@ import {
   type CollectiblePlacement,
   isCollectibleType,
 } from '../types/collectible';
-import type {
-  GridPoint,
-  LevelDefinition,
-  LevelObjectType,
-  LevelTerrainArea,
-  TerrainType,
+import type { EnemyGroundRect, EnemyPlacement } from '../types/enemy';
+import {
+  isEnemyObject,
+  type GridPoint,
+  type LevelDefinition,
+  type LevelObjectType,
+  type LevelTerrainArea,
+  type TerrainType,
 } from '../types/level';
 import type {
   CameraFrame,
@@ -78,6 +80,7 @@ export function createLevelGeometry(level: LevelDefinition): LevelGeometry {
   }));
 
   const collectibles = createCollectiblePlacements(level);
+  const enemies = createEnemyPlacements(level);
 
   return {
     levelId: level.id,
@@ -89,7 +92,46 @@ export function createLevelGeometry(level: LevelDefinition): LevelGeometry {
     terrain,
     collectibles,
     collectibleTotals: countCollectiblePlacements(collectibles),
+    enemies,
   };
+}
+
+/**
+ * Builds deterministic enemy placements.
+ *
+ * `x`/`y` uses the same bottom-center feet anchor as the player spawn. Patrol
+ * tile columns `minX..maxX` expand to pixel body-edge extents:
+ * `left = minX * tileSize`, `right = (maxX + 1) * tileSize`.
+ * Keys are derived from the validated object index, like collectibles.
+ */
+export function createEnemyPlacements(level: LevelDefinition): EnemyPlacement[] {
+  const placements: EnemyPlacement[] = [];
+
+  level.objects.forEach((object, index) => {
+    if (!isEnemyObject(object)) {
+      return;
+    }
+
+    const feet = cellBottomCenter({ x: object.x, y: object.y }, level.tileSize);
+
+    placements.push({
+      key: `enemy:${index}`,
+      enemyId: object.enemyId,
+      x: feet.x,
+      y: feet.y,
+      patrol: {
+        left: object.patrol.minX * level.tileSize,
+        right: (object.patrol.maxX + 1) * level.tileSize,
+      },
+    });
+  });
+
+  return placements;
+}
+
+/** Solid terrain rectangles used by allocation-free enemy ledge probes. */
+export function solidTerrainRects(geometry: LevelGeometry): EnemyGroundRect[] {
+  return geometry.terrain.filter((placement) => placement.solid).map((placement) => placement.rect);
 }
 
 /**
@@ -172,7 +214,7 @@ export function summarizeUnimplementedObjects(level: LevelDefinition): IgnoredOb
   let total = 0;
 
   for (const object of level.objects) {
-    if (isCollectibleType(object.type)) {
+    if (isCollectibleType(object.type) || isEnemyObject(object)) {
       continue;
     }
 

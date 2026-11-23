@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { EnemiesConfig } from '../types/enemy';
 import type { LevelDefinition } from '../types/level';
 import type {
   IgnoredObjectSummary,
@@ -7,11 +8,14 @@ import type {
 } from '../types/level-runtime';
 import { createLevelBackdrop } from '../factories/BackdropFactory';
 import { createCollectibles, type CollectibleRuntime } from '../factories/CollectibleFactory';
+import { createEnemies, type EnemyRuntime } from '../factories/EnemyFactory';
 import { createGoalMarker, type GoalRuntime } from '../factories/GoalMarkerFactory';
 import { createTerrain } from '../factories/TerrainFactory';
+import { validateEnemyPlacements } from './enemy-config-validator';
 import {
   createLevelGeometry,
   findSolidTerrainAtCell,
+  solidTerrainRects,
   summarizeUnimplementedObjects,
 } from './level-geometry';
 
@@ -23,8 +27,15 @@ export interface LevelRuntime {
   readonly backdrop: Phaser.GameObjects.Graphics;
   /** Coin/star instances and the group used for overlap. */
   readonly collectibles: CollectibleRuntime;
+  /** Enemy instances and the dynamic group used for collision/overlap. */
+  readonly enemies: EnemyRuntime;
   /** Valid future object types (bomb/shield/magnet) deliberately not created. */
   readonly unimplementedObjects: IgnoredObjectSummary;
+}
+
+export interface LevelLoadOptions {
+  /** Validated archetype registry used to resolve `enemyId` references. */
+  readonly enemies: EnemiesConfig;
 }
 
 export type LevelLoadResult =
@@ -33,13 +44,17 @@ export type LevelLoadResult =
 
 /**
  * Phaser-aware level orchestration: converts a validated definition into
- * geometry, placeholder visuals, static bodies, collectibles and a goal
- * marker/sensor.
+ * geometry, placeholder visuals, static bodies, collectibles, enemies and a
+ * goal marker/sensor.
  *
- * It deliberately does not create the player, input, camera, HUD or colliders;
- * those are GameScene's wiring responsibilities.
+ * It deliberately does not create the player, input, camera, HUD or gameplay
+ * colliders; those are GameScene/EnemySystem wiring responsibilities.
  */
-export function loadLevel(scene: Phaser.Scene, level: LevelDefinition): LevelLoadResult {
+export function loadLevel(
+  scene: Phaser.Scene,
+  level: LevelDefinition,
+  options: LevelLoadOptions,
+): LevelLoadResult {
   const blockingTerrain = findSolidTerrainAtCell(level, level.spawn);
 
   if (blockingTerrain !== null) {
@@ -59,11 +74,31 @@ export function loadLevel(scene: Phaser.Scene, level: LevelDefinition): LevelLoa
     };
   }
 
+  const enemyIssues = validateEnemyPlacements(level, options.enemies);
+
+  if (enemyIssues.length > 0) {
+    return {
+      ok: false,
+      error: {
+        code: 'invalid-level',
+        levelId: level.id,
+        message: `Level "${level.id}" contains invalid enemy placement data.`,
+        details: enemyIssues,
+      },
+    };
+  }
+
   const geometry = createLevelGeometry(level);
   const backdrop = createLevelBackdrop(scene, level);
   const terrain = createTerrain(scene, geometry);
   const goal = createGoalMarker(scene, geometry.goal);
   const collectibles = createCollectibles(scene, geometry.collectibles);
+  const enemies = createEnemies(
+    scene,
+    geometry.enemies,
+    options.enemies,
+    solidTerrainRects(geometry),
+  );
   const unimplementedObjects = summarizeUnimplementedObjects(level);
 
   if (import.meta.env.DEV) {
@@ -74,7 +109,7 @@ export function loadLevel(scene: Phaser.Scene, level: LevelDefinition): LevelLoa
     }
 
     console.info(
-      `[LevelLoader] Level "${level.id}" collectibles: ${geometry.collectibleTotals.coins} coin(s), ${geometry.collectibleTotals.stars} collectible star(s).`,
+      `[LevelLoader] Level "${level.id}" collectibles: ${geometry.collectibleTotals.coins} coin(s), ${geometry.collectibleTotals.stars} collectible star(s); enemies: ${enemies.totalCount}.`,
     );
   }
 
@@ -86,6 +121,7 @@ export function loadLevel(scene: Phaser.Scene, level: LevelDefinition): LevelLoa
       goal,
       backdrop,
       collectibles,
+      enemies,
       unimplementedObjects,
     },
   };
