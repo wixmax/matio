@@ -18,8 +18,8 @@
 5. Check Phaser 4 APIs before using them: `node_modules/phaser/types/phaser.d.ts` or
    `node_modules/phaser/skills/<topic>/SKILL.md`. Do not copy Phaser 3 code from memory.
 6. For gameplay changes, identify the config/content involved: `player.json`, `enemies.json`,
-   `combat.json`, `scoring.json`, `level-order.json`, level JSON and the save schema are validated
-   content, not inline constants.
+   `combat.json`, `bombs.json`, `effects.json`, `scoring.json`, `level-order.json`, level JSON and
+   the save schema are validated content, not inline constants.
 
 ## 3. Implementation loop
 
@@ -50,6 +50,12 @@ Rules of thumb:
 
 The dev server uses port **5173** with `strictPort`. If the port is taken, stop the other process
 instead of changing the port, so review instructions remain stable.
+
+Open `/tests/effects-browser.html?touch=1` in Vite dev to verify the effect integration.
+It uses scripted Arcade contacts, isolated storage and a manually stepped game loop.
+Review damage priority, terrain obstruction, coin settlement, pause, fall, Retry, Victory
+and Game Over. Run `/tests/bomb-browser.html?touch=1` for bomb and synthetic multitouch
+regressions. Check the production preview separately.
 
 ## 5. Coding standards
 
@@ -192,8 +198,7 @@ real-device testing.
 - Test the level via `?level=<id>`, then run `npm run test`, `npm run typecheck`, `npm run build`.
 - Add a level without editing TypeScript. The practical tutorial lives in
   `docs/LEVEL_FORMAT.md#9-how-to-create-level-04json-without-modifying-typescript`.
-- Valid-but-unimplemented object entries must remain ignored with dev diagnostics; do not implement
-  power-ups as a side effect.
+- Place shield and magnet in reachable empty cells. Verify effects leave scoring totals unchanged.
 - Scoring values live in `content/config/scoring.json`; save schema changes require a migration and
   tests.
 

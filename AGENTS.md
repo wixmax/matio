@@ -1,5 +1,13 @@
 # AGENTS.md — Instructions for AI Coding Agents
 
+Task 006-B effect rules: validate tuning from `content/config/effects.json` before boot.
+Each attempt owns one `ActiveEffects` instance. CollectionSystem routes shield and magnet
+pickups to EffectSystem. Magnet pulls reachable coins using solid level geometry, and
+CollectionSystem settles both overlap and magnet arrivals through CollectionLedger.
+Combat classifies stomp first, then checks player invulnerability, then allows shield
+absorption before health damage. Fall respawn retains effect state and collected pickups.
+Retry creates a fresh run. Dispose effect state and visuals on victory, Game Over and shutdown.
+
 Task 006-A bomb rules: tuning is validated from `content/config/bombs.json`.
 `BombSystem` owns run inventory, pickups, Arcade projectiles and explosion lifetime.
 External enemy damage enters through `EnemySystem`, which retains health and
@@ -15,10 +23,10 @@ technical architect reviews each task. Read this file before doing anything.
   **Vitest 5.1.1**, npm, JSON content, Phaser Arcade Physics.
 - Logical resolution 1280×720, landscape-first, FIT scaling, WebGL with Canvas fallback.
 - No React/Vue/Angular/Next.js, no backend, no authentication, no database, no cloud services.
-- Current milestone: **Task 005 complete** — JSON-driven levels, terrain/collision generation,
+- Current milestone: **Task 006-B** — JSON-driven levels, terrain/collision generation,
   goal marker, camera follow, collectibles, scoring/rating, progression, local save, plus JSON
   enemy archetypes, patrol behavior, stomp/damage combat, player health/invulnerability and a
-  Game Over/retry flow. TASK 006-A adds player bomb pickups, throws and explosion combat.
+  Game Over/retry flow, bomb throws and explosion combat, shield and coin magnet effects.
 
 ## Mandatory rules
 
@@ -103,7 +111,7 @@ changes. The dev server uses a fixed port so review steps stay stable.
 Import direction must stay acyclic:
 `core -> scenes -> entities + input + ui + systems + factories + types`.
 Pure systems and `types/` must never import scenes or UI. `types/` must stay Phaser-free.
-`LevelLoader` is the one Phaser-aware system; it may import factories and level geometry.
+`LevelLoader`, CollectionSystem, EnemySystem, BombSystem and EffectSystem are Phaser-aware.
 
 ## Technical conventions
 
@@ -187,8 +195,8 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
 - Add/change levels without editing TypeScript; use `?level=<id>` in development to load one.
 - Player configuration is versioned JSON (`content/config/player.json`, schema 1). Validate it and
   keep movement tuning there.
-- Valid-but-unimplemented object entries (`shield`, `magnet`) are preserved in JSON and
-  ignored at runtime with development diagnostics. Never turn them into coins or award score.
+- Shield and magnet pickups use empty, reachable tile centers and grant no direct score.
+  Effect tuning is schema 1 and is validated by `validateEffectsConfig()`.
 - `content/config/scoring.json` is versioned (`schemaVersion: 1`) and validated by
   `validateScoringConfig()` before gameplay starts.
 - `content/config/enemies.json` and `content/config/combat.json` are versioned (`schemaVersion: 1`)

@@ -4,7 +4,6 @@ import {
   createCollectiblePlacements,
   createEnemyPlacements,
   createLevelGeometry,
-  summarizeUnimplementedObjects,
 } from '../src/systems/level-geometry';
 import type { LevelDefinition } from '../src/types/level';
 
@@ -69,13 +68,12 @@ describe('enemy geometry - anchors and patrol bounds', () => {
     expect(collectibles).toEqual([{ key: 'coin:0', type: 'coin', x: 224, y: 416 }]);
   });
 
-  it('exposes enemies on the geometry and excludes them from unimplemented objects', () => {
+  it('exposes enemies on the geometry without changing scoring totals', () => {
     const geometry = createLevelGeometry(createLevel());
-    const summary = summarizeUnimplementedObjects(createLevel());
 
     expect(geometry.enemies).toHaveLength(2);
     expect(geometry.enemies[0]?.enemyId).toBe('mushroom');
-    expect(summary).toEqual({ total: 0, byType: {} });
+    expect(geometry.collectibleTotals).toEqual({ coins: 1, stars: 0 });
   });
 
   it('produces deterministic keys and placements', () => {

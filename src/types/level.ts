@@ -22,7 +22,7 @@ export const OBJECT_TYPES = ['coin', 'star', 'bomb', 'shield', 'magnet', 'enemy'
 export type TerrainType = (typeof TERRAIN_TYPES)[number];
 export type LevelObjectType = (typeof OBJECT_TYPES)[number];
 
-/** Object types that are not enemy placements (collectibles and future items). */
+/** Object types that are not enemy placements (collectibles and power-ups). */
 export type LevelItemObjectType = Exclude<LevelObjectType, 'enemy'>;
 
 /** Integer tile coordinate. */
@@ -60,7 +60,7 @@ export interface LevelEnemyPatrolBounds {
 }
 
 /**
- * A collectible or legacy/future item placement. `id` is optional, but when
+ * A collectible or power-up placement. `id` is optional, but when
  * present it must be unique inside the level so systems can reference objects
  * (quests, save data) reliably.
  */

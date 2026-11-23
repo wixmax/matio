@@ -4,7 +4,7 @@ Bomb pickups use the existing schema-1 item object, for example
 `{ "id": "bomb-01", "type": "bomb", "x": 7, "y": 12 }`. Coordinates
 identify the cell center. Place them in empty, reachable cells. Pickups add one
 run-only bomb up to `maxInventory` in `content/config/bombs.json`. They do not
-award score or affect rating. Shield and magnet objects remain inactive.
+award score or affect rating.
 
 Levels are JSON files under `content/levels/<world>/`. They are discovered automatically at build
 time; adding a valid file is enough to register a playable level.
@@ -18,9 +18,7 @@ time; adding a valid file is enough to register a playable level.
 
 Status: schema 1 is implemented end-to-end (discovery, validation, terrain, colliders, collectibles,
 enemies, goal completion, camera, respawn, combat, scoring/rating, progression, save and error view).
-`coin`, `star`, `bomb` and `enemy` objects are instantiated. `shield` and `magnet` are validated
-and ignored at runtime. Enemy support is an additive schema 1 extension: older builds ignore
-the new object type, and no existing field changed meaning.
+All six schema-1 object types are instantiated. Shield and magnet use the existing item shape.
 
 ## 1. Coordinate system and anchors
 
@@ -87,7 +85,7 @@ Shipped levels:
 
 | ID | File | Name | Size (tiles) | Coins | Stars | Enemies | Unimplemented |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | bomb, shield |
+| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | bomb, shield, magnet |
 | `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | — |
 | `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | — |
 
@@ -158,8 +156,8 @@ unique IDs.
 | `star` | **yes** | Non-solid pickup, 500 points, stronger feedback |
 | `enemy` | **yes** | Patrol entity from an archetype; stomp/damage/score rules apply |
 | `bomb` | yes | Adds one bomb to the current run's inventory, with no score |
-| `shield` | no | Valid content, preserved, never instantiated, no score |
-| `magnet` | no | Valid content, preserved, never instantiated, no score |
+| `shield` | yes | Refreshes the temporary shield and replenishes charges |
+| `magnet` | yes | Refreshes temporary attraction of nearby, reachable coins |
 
 Rules:
 
@@ -170,7 +168,12 @@ Rules:
 - Collection is idempotent per run. Collected objects stay collected after a fall; Retry creates a
   fresh attempt and restores them.
 - Spawn positions must not overlap solid terrain. The loader checks the spawn cell as a safety guard.
-- Unimplemented objects are logged in development with their counts and ignored at runtime.
+- Add power-ups to the `objects` array with a unique optional ID, for example
+  `{ "id": "shield-01", "type": "shield", "x": 6, "y": 12 }` or
+  `{ "id": "magnet-01", "type": "magnet", "x": 8, "y": 11 }`. Use reachable empty
+  cells. LevelLoader reports the path to any bomb, shield or magnet inside solid terrain.
+  Shield and magnet tuning lives in `content/config/effects.json`. These pickups grant
+  zero points and are excluded from coin/star totals.
 
 ### 5.1 Enemy objects
 
@@ -241,8 +244,7 @@ Archetype balance (health, speed, stompable, damage, score) is **not** authored 
 }
 ```
 
-The shipped level 01 contains 12 coins, 2 collectible stars, 3 enemies, 2 bomb pickups and one
-inactive shield. All placements use the same JSON array and share duplicate-ID validation.
+The shipped level 01 contains 12 coins, 2 collectible stars, 3 enemies, 2 bomb pickups, one shield and one magnet. All placements use the same JSON array and share duplicate-ID validation.
 
 ## 7. Validation and loading errors
 
@@ -300,7 +302,7 @@ Rules still enforced by the validator:
    (roughly 100–110 px / 1.5 tiles with current tuning) and gaps within a running jump
    (roughly 3 tiles / 192 px).
 6. Add `coin`/`star` objects in empty cells after the path. Place at least one star on an optional
-   platform. Put `bomb` pickups in empty cells on reachable routes. `shield` and `magnet` remain inactive.
+   platform. Put bomb, shield and magnet pickups in empty cells on reachable routes.
 7. Optionally add `enemy` objects: empty cell, solid ground directly below, archetype from
    `content/config/enemies.json`, ordered patrol columns containing the enemy cell. Keep the spawn
    cell clear and add the new ID to `content/config/level-order.json` if it belongs to the campaign.

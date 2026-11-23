@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import type { CollectibleType } from '../types/collectible';
+import type { CollectiblePickupType } from '../types/collectible';
+import type { EffectType } from '../types/effects';
 import { PALETTE } from '../ui/theme';
 
 /**
@@ -12,12 +13,49 @@ import { PALETTE } from '../ui/theme';
 export const COLLECTIBLE_FRAME = {
   coin: { width: 40, height: 40, bodyWidth: 26, bodyHeight: 26 },
   star: { width: 48, height: 48, bodyWidth: 32, bodyHeight: 32 },
+  shield: { width: 40, height: 40, bodyWidth: 30, bodyHeight: 32 },
+  magnet: { width: 40, height: 40, bodyWidth: 30, bodyHeight: 32 },
 } as const;
 
-export const COLLECTIBLE_TEXTURES: Readonly<Record<CollectibleType, string>> = {
+export const COLLECTIBLE_TEXTURES: Readonly<Record<CollectiblePickupType, string>> = {
   coin: 'matio-collectible-coin',
   star: 'matio-collectible-star',
+  shield: 'matio-collectible-shield',
+  magnet: 'matio-collectible-magnet',
 };
+
+export function ensureEffectPickupTexture(scene: Phaser.Scene, type: EffectType): void {
+  const key = COLLECTIBLE_TEXTURES[type];
+  if (scene.textures.exists(key)) return;
+
+  const graphics = scene.add.graphics();
+  if (type === 'shield') {
+    const outline = [
+      new Phaser.Math.Vector2(6, 7), new Phaser.Math.Vector2(20, 3), new Phaser.Math.Vector2(34, 7),
+      new Phaser.Math.Vector2(32, 25), new Phaser.Math.Vector2(20, 37), new Phaser.Math.Vector2(8, 25),
+    ];
+    graphics.fillStyle(PALETTE.waterLight);
+    graphics.fillPoints(outline, true);
+    graphics.lineStyle(3, PALETTE.ink);
+    graphics.strokePoints(outline, true);
+    graphics.lineStyle(3, PALETTE.white);
+    graphics.lineBetween(20, 11, 20, 26);
+    graphics.lineBetween(14, 18, 26, 18);
+  } else {
+    graphics.fillStyle(PALETTE.ink);
+    graphics.fillRoundedRect(4, 6, 32, 30, 10);
+    graphics.fillStyle(PALETTE.player);
+    graphics.fillRoundedRect(7, 7, 26, 26, 8);
+    graphics.fillStyle(PALETTE.ink);
+    graphics.fillRect(16, 6, 8, 17);
+    graphics.fillStyle(PALETTE.white);
+    graphics.fillRect(7, 9, 9, 7);
+    graphics.fillRect(24, 9, 9, 7);
+  }
+  const frame = COLLECTIBLE_FRAME[type];
+  graphics.generateTexture(key, frame.width, frame.height);
+  graphics.destroy();
+}
 
 export function ensureCollectibleTextures(scene: Phaser.Scene): void {
   if (scene.textures.exists(COLLECTIBLE_TEXTURES.coin)) {

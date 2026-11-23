@@ -3,12 +3,18 @@
 A lightweight, modular 2D side-scrolling platformer built with **Phaser 4**, **TypeScript** and **Vite**.
 The project is developed incrementally, one reviewed milestone at a time.
 
-**Current status: Task 005 — enemies, stomp combat and player health.** The game boots into a menu
+**Current status: Task 006-B — shield, coin magnet and temporary effects.** The game boots into a menu
 with level selection, loads validated JSON levels and runs the full loop: collect coins/stars, stomp
 or avoid JSON-defined enemies, reach the goal, calculate score (including enemy defeats) and a 1–3
 star rating, save best results, unlock the next level and continue. Movement, variable jumping,
 coyote time, jump buffering, unified keyboard/touch controls, camera follow, respawn, player health,
 invulnerability, knockback, Game Over/retry and versioned local save are in place.
+
+Bombs, shields and magnets are placed in the level JSON. Throw bombs with X/J or
+the touch THROW button. The shield protects against one eligible enemy hit before
+its 15-second limit. The magnet attracts nearby coins for 12 seconds along clear
+paths. The HUD shows active effects and remaining time. Falling preserves the
+current attempt. Retry restores pickups and clears effects.
 
 ## Requirements
 
@@ -125,9 +131,9 @@ Always run `typecheck`, `test` and `build` before handing a task back for review
 - Player physics tuning and scoring loaded from validated external JSON
   (`content/config/player.json`, `content/config/scoring.json`).
 - Development-only debug HUD and dev bridge; production builds omit both.
-- 233 unit tests covering validation, geometry/camera math, collectibles, enemies, patrol
+- Vitest suites covering validation, geometry/camera math, collectibles, enemies, patrol
   behavior, stomp classification, player health/invulnerability, enemy scoring, gameplay states,
-  scoring/rating, progression, saves, player configuration, input resolution and jump rules.
+  scoring/rating, progression, saves, player configuration, input resolution, jump rules and effects.
 
 ## Scoring and persistence
 
@@ -137,7 +143,7 @@ Always run `typecheck`, `test` and `build` before handing a task back for review
 | Collectible star | 500 |
 | Mushroom defeat | 200 |
 | Snail defeat | 350 |
-| Spiky defeat | not possible in Task 005 (score 0 reserved) |
+| Spiky defeat | 0 points, possible with bombs |
 | Level completion | 1000 |
 
 The HUD shows collected + enemy points while playing; the result adds the completion bonus. Rating
@@ -162,11 +168,9 @@ reset to first-launch data with a console diagnostic; an unsupported newer save 
 
 ## Explicitly not implemented yet
 
-Bombs, projectiles, shields, magnets, power-up inventory, chasing/flying enemies, enemy projectiles,
-bosses, permanent lives, persistent wallet/currency, shop, Tiled/editor integration, daily rewards,
-achievements, ads, cloud save, Android packaging and final art/audio. Valid unimplemented object
-entries remain in level JSON with development diagnostics. Spiky health is reserved for future combat
-methods.
+Permanent power-up inventory, chasing/flying enemies, enemy projectiles, bosses, permanent lives,
+persistent wallet/currency, shop, Tiled/editor integration, daily rewards, achievements, ads, cloud
+save, Android packaging and final art/audio.
 
 ## Project layout
 

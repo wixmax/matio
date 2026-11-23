@@ -18,6 +18,34 @@ advance with gameplay time, so neither needs an asynchronous callback.
 Future breakable blocks may separately consume explosion
 positions and radii without changing enemy damage or inventory.
 
+## Task 006-B temporary effects
+
+Startup validates schema-1 `content/config/effects.json` as bundled configuration.
+The engine-free `ActiveEffects` tracks independent durations and shield charges.
+A pickup refreshes its configured duration and replenishes charges up to their cap.
+The scene advances it with Phaser gameplay delta. Pause and sleep stop scene updates,
+and hidden tabs skip effect updates. Fall respawn keeps the same manager and pickup
+entities. Victory, Game Over and scene shutdown dispose the effects and shield visuals.
+Retry constructs a fresh attempt.
+
+The level loader places power-ups at the same tile-center anchors as coins and stars.
+CollectionSystem owns overlaps and the shared entity guard, routes power-up pickups
+to EffectSystem, and records scoring pickups in CollectionLedger. EnemySystem resolves
+stomps first. Damage checks PlayerHealth eligibility, tries shield absorption, then
+applies normal damage when eligible. Absorption starts the configured combat
+invulnerability window to prevent repeated contact callbacks from spending or damaging
+again in the same window.
+
+EffectSystem pulls only the coin list from CollectibleFactory. It checks the straight
+segment from coin center to player body center against existing solid rectangles expanded
+by the coin body's half-extents. Close corners can block attraction. Movement uses the
+configured speed and the usable fraction of the gameplay frame, with the existing overlap
+body. Pulled coins stop bobbing and keep their positions when the effect ends. The magnet's
+distance threshold and ordinary Arcade overlap both settle through CollectionSystem.collect.
+The HUD updates effect text on whole-second or charge changes. Effects have no save model.
+A future power-up can use the same run-owned clock and pickup hook, with its own gameplay
+rules and visuals.
+
 ## 1. Stack
 
 | Layer | Choice | Version | Rationale |
@@ -51,7 +79,7 @@ src/entities/             Player, Collectible, Enemy and procedural placeholder 
 src/systems/              Pure rules + Phaser-aware orchestration:
                           validators, scoring, progression, save, jump rules, geometry,
                           combat rules, player health, patrol behavior, enemy ledger,
-                          LevelRepository, LevelLoader, CollectionSystem, EnemySystem
+                          LevelRepository, LevelLoader, CollectionSystem, EnemySystem, BombSystem, EffectSystem
 src/factories/            Phaser construction: terrain, backdrop, goal marker,
                           collectibles and enemies
 src/input/                Unified keyboard/touch input and pure input resolution
@@ -70,7 +98,7 @@ Import direction:
 
 ```text
 core -> scenes -> entities + input + ui + systems + factories + types
-systems/LevelLoader + CollectionSystem + EnemySystem
+systems/LevelLoader + CollectionSystem + EnemySystem + BombSystem + EffectSystem
         -> factories + entities + systems + types
                                                       (Phaser-aware orchestration)
 systems (pure) -> types
@@ -81,8 +109,7 @@ types -> (nothing, no Phaser)
 
 `types/` never imports Phaser. `LevelRepository`, `level-geometry`, validators, scoring, progression,
 save rules, jump rules, combat rules, player health, patrol behavior and the enemy ledger stay
-engine-free. `LevelLoader`, `CollectionSystem`, `EnemySystem` and the factories are the only
-Phaser-heavy systems/factories.
+engine-free, as do `ActiveEffects` and the effect rules. Phaser-aware systems wire those rules to the game.
 
 ## 3. Scene lifecycle
 
@@ -165,11 +192,10 @@ core/level-repository  ──►  systems/LevelRepository
 - Rejects a spawn cell that overlaps solid terrain (`unsafe-spawn`) before creating anything.
 - Cross-checks every enemy placement against the registry and terrain safety before instantiating
   anything; unknown archetypes or unsafe cells return an `invalid-level` failure with field paths.
-- Builds geometry, backdrop, terrain, goal marker/sensor, coin/star and enemy instances.
-- Returns `LevelRuntime` with geometry, solid bodies, goal runtime, collectibles, enemies, backdrop
-  and the unimplemented-object report.
+- Builds geometry, backdrop, terrain, goal marker/sensor, scoring and effect pickups, and enemies.
+- Returns `LevelRuntime` with geometry, solid bodies, goal runtime, pickups, enemies and backdrop.
 - Does not create the player, input, camera, HUD or player-facing colliders/overlaps.
-- Logs ignored `shield`/`magnet` objects, collectible totals and enemy counts in development.
+- Logs scoring collectible totals and enemy counts in development.
 
 ### TerrainFactory (`src/factories/TerrainFactory.ts`)
 
@@ -181,7 +207,7 @@ core/level-repository  ──►  systems/LevelRepository
 
 ### CollectibleFactory (`src/factories/CollectibleFactory.ts`)
 
-- One `Collectible` sprite per validated coin/star placement.
+- One `Collectible` sprite per validated coin, star, shield or magnet placement.
 - One Arcade group for a single player/collectibles overlap.
 - Bodies have gravity disabled and are immovable: pickup only, never a blocking obstacle.
 - Procedural textures live in `entities/collectible-textures.ts` and can be replaced by an atlas.
@@ -293,7 +319,7 @@ model (`systems/player-health.ts`); the Player never decides how much damage it 
 - `content/levels/**/*.json` is discovered by eager raw glob; editing/adding JSON requires only a
   reload/rebuild. Adding `level-04.json` needs no TypeScript changes.
 - Enemy placements reference an archetype by ID; LevelLoader rejects unknown IDs or unsafe cells.
-- Valid-but-unimplemented objects (`shield`/`magnet`) remain ignored with dev diagnostics.
+- `content/config/effects.json` defines durations, shield charges, magnet radius, speed and collection distance.
 - Invalid content never silently falls back to a different level.
 
 ## 11. UI, debug and errors
@@ -492,8 +518,7 @@ Spiky health is reserved for future combat methods and is not reduced by stompin
    and production save write were not replayed because the dev bridge is intentionally absent.
 6. Level content is bundled; no runtime level editing/hot reload beyond Vite.
 7. Camera zoom is fixed at 1; `TouchControlButton.isPointerWithin` assumes zoom 1.
-8. Bomb/shield/magnet object definitions remain valid but unimplemented; spiky has no defeat method
-   yet, so its configured score of 0 is not used.
+8. Magnet obstruction uses a direct swept path; coins behind close corners can remain in place.
 9. Level design is placeholder and not tuned by a designer; collectible/enemy reachability was checked
    against the jump arc and solid-cell validation, not exhaustively played on a device.
 10. Eager glob loads all level JSON at startup (acceptable now; revisit for large catalogs).

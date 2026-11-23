@@ -5,6 +5,7 @@ import { Collectible } from '../entities/Collectible';
 export interface CollectibleRuntime {
   /** Physics group used by one player/collectibles overlap. */
   readonly group: Phaser.Physics.Arcade.Group;
+  readonly coins: readonly Collectible[];
 }
 
 /**
@@ -22,5 +23,5 @@ export function createCollectibles(
     group.add(instance);
   }
 
-  return { group };
+  return { group, coins: instances.filter((instance) => instance.collectibleType === 'coin') };
 }

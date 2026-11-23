@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Collectible } from '../entities/Collectible';
-import type { CollectibleCounts } from '../types/collectible';
+import { isCollectibleType, type CollectibleCounts } from '../types/collectible';
+import type { EffectType } from '../types/effects';
 import type { ScoringConfig } from '../types/scoring';
 import { addUiText } from '../ui/components/ui-text';
 import { PALETTE, toCssColor } from '../ui/theme';
@@ -18,6 +19,7 @@ export interface CollectionSystemOptions {
   readonly collectibles: Phaser.Physics.Arcade.Group;
   readonly scoring: ScoringConfig;
   readonly onChanged: (snapshot: CollectionSnapshot) => void;
+  readonly onEffectPickup: (type: EffectType) => void;
 }
 
 /**
@@ -32,6 +34,8 @@ export class CollectionSystem {
   private readonly scene: Phaser.Scene;
   private readonly scoring: ScoringConfig;
   private readonly onChanged: (snapshot: CollectionSnapshot) => void;
+  private readonly onEffectPickup: (type: EffectType) => void;
+  private readonly overlap: Phaser.Physics.Arcade.Collider;
   private readonly ledger = new CollectionLedger();
 
   private frozen = false;
@@ -40,14 +44,16 @@ export class CollectionSystem {
     this.scene = options.scene;
     this.scoring = options.scoring;
     this.onChanged = options.onChanged;
+    this.onEffectPickup = options.onEffectPickup;
 
-    options.scene.physics.add.overlap(
+    this.overlap = options.scene.physics.add.overlap(
       options.player,
       options.collectibles,
       this.handleOverlap,
       undefined,
       this,
-    );  }
+    );
+  }
 
   get counts(): CollectibleCounts {
     return this.ledger.counts;
@@ -64,33 +70,44 @@ export class CollectionSystem {
   /** Stops collection immediately. Used when completion settlement starts. */
   freeze(): void {
     this.frozen = true;
+    this.overlap.active = false;
   }
 
-  private readonly handleOverlap: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
-    _player,
-    target,
-  ): void => {
-    if (this.frozen || !(target instanceof Collectible)) {
-      return;
-    }
+  destroy(): void {
+    this.freeze();
+    this.overlap.destroy();
+  }
 
+  collect(target: Collectible): void {
     // The entity guard prevents duplicate tweens/destruction; the ledger guard
     // prevents duplicate score/HUD updates even if both are reached twice.
-    if (!target.collect()) {
+    if (this.frozen || !target.active || !target.collect()) {
       return;
     }
 
-    if (!this.ledger.collect(target.collectibleKey, target.collectibleType)) {
+    const type = target.collectibleType;
+    if (!isCollectibleType(type)) {
+      this.onEffectPickup(type);
+      return;
+    }
+    if (!this.ledger.collect(target.collectibleKey, type)) {
       return;
     }
 
     this.showCollectionFeedback(
       target.x,
       target.y,
-      target.collectibleType,
-      this.scoring.points[target.collectibleType],
+      type,
+      this.scoring.points[type],
     );
     this.onChanged(this.snapshot);
+  }
+
+  private readonly handleOverlap: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+    _player,
+    target,
+  ): void => {
+    if (target instanceof Collectible) this.collect(target);
   };
 
   private showCollectionFeedback(

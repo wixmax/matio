@@ -1,20 +1,18 @@
 import {
   type CollectibleCounts,
   type CollectiblePlacement,
-  isCollectibleType,
+  isCollectiblePickupType,
 } from '../types/collectible';
 import type { EnemyGroundRect, EnemyPlacement } from '../types/enemy';
 import {
   isEnemyObject,
   type GridPoint,
   type LevelDefinition,
-  type LevelObjectType,
   type LevelTerrainArea,
   type TerrainType,
 } from '../types/level';
 import type {
   CameraFrame,
-  IgnoredObjectSummary,
   LevelGeometry,
   PixelRect,
   TerrainPlacement,
@@ -135,7 +133,7 @@ export function solidTerrainRects(geometry: LevelGeometry): EnemyGroundRect[] {
 }
 
 /**
- * Builds deterministic coin/star placements.
+ * Builds deterministic score and effect pickup placements.
  *
  * The key is derived from the validated object index, not from an optional
  * content ID: it is stable for a given level file and cannot collide with
@@ -145,7 +143,7 @@ export function createCollectiblePlacements(level: LevelDefinition): Collectible
   const placements: CollectiblePlacement[] = [];
 
   level.objects.forEach((object, index) => {
-    if (!isCollectibleType(object.type)) {
+    if (!isCollectiblePickupType(object.type)) {
       return;
     }
 
@@ -171,7 +169,7 @@ function countCollectiblePlacements(
   for (const placement of placements) {
     if (placement.type === 'coin') {
       coins += 1;
-    } else {
+    } else if (placement.type === 'star') {
       stars += 1;
     }
   }
@@ -202,26 +200,6 @@ export function findSolidTerrainAtCell(
   }
 
   return null;
-}
-
-/**
- * Future object policy: shield/magnet remain valid content without runtime
- * behavior. Coin/star/bomb are implemented and therefore not reported here.
- */
-export function summarizeUnimplementedObjects(level: LevelDefinition): IgnoredObjectSummary {
-  const byType: Partial<Record<LevelObjectType, number>> = {};
-  let total = 0;
-
-  for (const object of level.objects) {
-    if (isCollectibleType(object.type) || isEnemyObject(object) || object.type === 'bomb') {
-      continue;
-    }
-
-    byType[object.type] = (byType[object.type] ?? 0) + 1;
-    total += 1;
-  }
-
-  return { total, byType };
 }
 
 /**

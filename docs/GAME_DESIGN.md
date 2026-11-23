@@ -5,6 +5,17 @@ X/J or the touch THROW control launches a bomb in the player's facing direction.
 After its fuse, a radius-based explosion damages enemies through their existing
 health and defeat scoring. Bombs do not damage the player or terrain.
 
+Task 006-B adds two automatic pickups. The shield lasts up to 15 seconds and absorbs
+one enemy contact that would deal damage. Stomps and contacts during invulnerability
+preserve the charge. Absorption flashes and starts the configured contact invulnerability.
+The magnet lasts 12 seconds and draws nearby coins along clear paths. Pulled coins grant
+the same score and collection credit as overlap pickups. Each new pickup refreshes its own
+duration. The shield restores its charge and both effects can run together.
+
+The HUD displays active durations and shield charges. Falling preserves the pickup history
+and the remaining effect state. Retry restores the pickups and clears effects. Victory and
+Game Over end both effects. The effects themselves are never saved.
+
 ## 1. Concept
 
 A colorful, cartoon 2D side-scrolling platformer. The player runs and jumps through handcrafted
@@ -71,7 +82,7 @@ themes, backgrounds and parallax.
 ### Collectibles and power-ups
 Coins and collectible stars are implemented: JSON placement, idempotent overlap, HUD counters,
 score feedback, persistent best-collection records. Bomb pickups and throws operate within the
-current run. Shields, magnets and temporary effects remain planned.
+current run. Shield and coin magnet pickups apply temporary effects during play.
 
 ### Scoring and progression
 Score breakdown (coins, collectible stars, enemy defeats, completion), 1–3 star rating, explicit
@@ -83,7 +94,7 @@ achievements and cloud save remain planned.
 Implemented in Task 005: JSON archetypes (mushroom, snail, spiky), deterministic patrol behavior,
 stomp classification, multi-hit enemies, non-stompable hazards, player health, invulnerability,
 knockback, defeat scoring and a Game Over/retry flow. Still planned: chase/flyer/turret behaviors,
-enemy projectiles, bosses, shields and respawning enemies.
+enemy projectiles, bosses and respawning enemies.
 
 ### Meta systems (later)
 Shop, inventory, achievements, daily quests, daily rewards, lucky spin. These must remain optional
@@ -102,7 +113,7 @@ Original character skins, animation sets, particles, music and sound effects, vi
 
 Details and naming rules live in [ASSET_GUIDE.md](ASSET_GUIDE.md).
 
-## 7. Current milestone (Task 005)
+## 7. Enemy combat milestone (Task 005)
 
 Implemented: enemies and player combat. Start a level → navigate deterministic patrol enemies →
 stomp stompable archetypes (snails need two hits) or avoid spiky enemies → take damage, knockback and
@@ -129,6 +140,8 @@ health/enemies/collectibles, falling keeps collections and health, and tests/typ
 - **Task 003** — JSON level repository/loader, terrain/collision generation, goal markers and camera.
 - **Task 004** — collectibles, goal completion, scoring/rating, progression, result screen and save.
 - **Task 005** — enemy archetypes/patrol, stomp combat, player health/damage, health HUD and Game Over.
+- **Task 006-A** — bomb pickups, throws and explosion combat.
+- **Task 006-B** — temporary shield and coin magnet pickups, effects, and HUD.
 
 ## 8. Product success criteria for the first playable
 

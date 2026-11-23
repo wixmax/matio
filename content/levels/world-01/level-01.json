@@ -39,8 +39,9 @@
     { "type": "coin", "x": 29, "y": 11 },
     { "id": "star-02", "type": "star", "x": 30, "y": 9 },
     { "type": "coin", "x": 31, "y": 11 },
-    { "id": "shield-01", "type": "shield", "x": 31, "y": 8 },
     { "type": "coin", "x": 35, "y": 11 },
+    { "id": "shield-01", "type": "shield", "x": 6, "y": 12 },
+    { "id": "magnet-01", "type": "magnet", "x": 8, "y": 11 },
     {
       "id": "mushroom-01",
       "type": "enemy",

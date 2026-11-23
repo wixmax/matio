@@ -1,3 +1,4 @@
+import type { EffectType } from './effects';
 import type { LevelObjectType } from './level';
 
 /**
@@ -13,11 +14,7 @@ export const COLLECTIBLE_TYPES = ['coin', 'star'] as const;
 
 export type CollectibleType = (typeof COLLECTIBLE_TYPES)[number];
 
-/**
- * Object types that remain valid content but have no runtime behavior yet.
- * Enemy placements are implemented and therefore excluded.
- */
-export type UnimplementedObjectType = Exclude<LevelObjectType, CollectibleType | 'enemy'>;
+export type CollectiblePickupType = CollectibleType | EffectType;
 
 /**
  * A validated collectible converted to world pixels.
@@ -28,7 +25,7 @@ export type UnimplementedObjectType = Exclude<LevelObjectType, CollectibleType |
 export interface CollectiblePlacement {
   /** Stable deterministic identity inside one level run. */
   readonly key: string;
-  readonly type: CollectibleType;
+  readonly type: CollectiblePickupType;
   readonly x: number;
   readonly y: number;
 }
@@ -42,6 +39,10 @@ export interface CollectibleCounts {
 export interface CollectibleTotals {
   readonly coins: number;
   readonly stars: number;
+}
+
+export function isCollectiblePickupType(type: LevelObjectType): type is CollectiblePickupType {
+  return isCollectibleType(type) || type === 'shield' || type === 'magnet';
 }
 
 export function isCollectibleType(type: LevelObjectType): type is CollectibleType {

@@ -1,14 +1,15 @@
 import Phaser from 'phaser';
-import type { CollectiblePlacement, CollectibleType } from '../types/collectible';
+import type { CollectiblePickupType, CollectiblePlacement } from '../types/collectible';
 import {
   COLLECTIBLE_FRAME,
   COLLECTIBLE_TEXTURES,
   ensureCollectibleTextures,
+  ensureEffectPickupTexture,
   ensureStarTexture,
 } from './collectible-textures';
 
 /**
- * One collectible coin or star.
+ * One score or effect pickup.
  *
  * The Arcade body is used only for overlap: gravity is disabled and the body is
  * immovable, so collectibles never block the player. `collect()` is the single
@@ -16,16 +17,19 @@ import {
  */
 export class Collectible extends Phaser.Physics.Arcade.Sprite {
   readonly collectibleKey: string;
-  readonly collectibleType: CollectibleType;
+  readonly collectibleType: CollectiblePickupType;
 
   private readonly arcadeBody: Phaser.Physics.Arcade.Body;
   private collected = false;
+  private isPulled = false;
 
   constructor(scene: Phaser.Scene, placement: CollectiblePlacement) {
-    ensureCollectibleTextures(scene);
-
-    if (placement.type === 'star') {
+    if (placement.type === 'coin') {
+      ensureCollectibleTextures(scene);
+    } else if (placement.type === 'star') {
       ensureStarTexture(scene);
+    } else {
+      ensureEffectPickupTexture(scene, placement.type);
     }
 
     super(scene, placement.x, placement.y, COLLECTIBLE_TEXTURES[placement.type]);
@@ -51,14 +55,16 @@ export class Collectible extends Phaser.Physics.Arcade.Sprite {
 
     this.setDepth(5);
 
-    scene.tweens.add({
-      targets: this,
-      y: placement.y - 8,
-      duration: placement.type === 'star' ? 1100 : 850,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+    if (placement.type === 'coin' || placement.type === 'star') {
+      scene.tweens.add({
+        targets: this,
+        y: placement.y - 8,
+        duration: placement.type === 'star' ? 1100 : 850,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
 
     if (placement.type === 'star') {
       scene.tweens.add({
@@ -73,6 +79,17 @@ export class Collectible extends Phaser.Physics.Arcade.Sprite {
 
   get isCollected(): boolean {
     return this.collected;
+  }
+
+  /** Takes over the coin's bob tween and keeps its overlap body aligned. */
+  moveByMagnet(x: number, y: number): void {
+    if (!this.isPulled) {
+      this.scene.tweens.killTweensOf(this);
+      this.arcadeBody.moves = false;
+      this.isPulled = true;
+    }
+    this.setPosition(x, y);
+    this.arcadeBody.updateFromGameObject();
   }
 
   /**

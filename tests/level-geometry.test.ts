@@ -9,7 +9,6 @@ import {
   createLevelGeometry,
   findSolidTerrainAtCell,
   isSolidTerrainType,
-  summarizeUnimplementedObjects,
   tileRectToPixel,
 } from '../src/systems/level-geometry';
 import { parseLevelJson } from '../src/systems/level-validator';
@@ -127,9 +126,9 @@ describe('level geometry - terrain classification', () => {
     expect(findSolidTerrainAtCell(waterOnly, { x: 3, y: 5 })).toBeNull();
   });
 
-  it('summarizes only unimplemented future objects', () => {
+  it('includes shield and magnet pickups but leaves bomb creation to BombSystem', () => {
     const level = createTestLevel();
-    const summary = summarizeUnimplementedObjects({
+    const placements = createCollectiblePlacements({
       ...level,
       objects: [
         ...level.objects,
@@ -139,8 +138,11 @@ describe('level geometry - terrain classification', () => {
       ],
     });
 
-    expect(summary.total).toBe(2);
-    expect(summary.byType).toEqual({ shield: 1, magnet: 1 });
+    expect(placements.slice(-2)).toEqual([
+      { key: 'shield:4', type: 'shield', x: 480, y: 224 },
+      { key: 'magnet:5', type: 'magnet', x: 544, y: 224 },
+    ]);
+    expect(placements.map(({ type }) => type)).toEqual(['coin', 'coin', 'star', 'shield', 'magnet']);
   });
 
   it('builds deterministic placements for coins and stars only', () => {

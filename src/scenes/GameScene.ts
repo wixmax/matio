@@ -7,6 +7,7 @@ import {
 } from '../core/level-config';
 import { requireCombatConfig } from '../core/combat-config';
 import { requireBombConfig } from '../core/bomb-config';
+import { requireEffectsConfig } from '../core/effects-config';
 import { requireEnemiesConfig } from '../core/enemies-config';
 import { requirePlayerConfig } from '../core/player-config';
 import { getLevelRepository } from '../core/level-repository';
@@ -17,13 +18,14 @@ import { InputManager } from '../input/InputManager';
 import { CollectionSystem } from '../systems/CollectionSystem';
 import { EnemySystem } from '../systems/EnemySystem';
 import { BombSystem } from '../systems/BombSystem';
+import { EffectSystem } from '../systems/EffectSystem';
 import {
   canStartCompletion,
   canStartGameOver,
   isGameplayActive,
   type GameplayState,
 } from '../systems/gameplay-state';
-import { computeCameraFrame } from '../systems/level-geometry';
+import { computeCameraFrame, solidTerrainRects } from '../systems/level-geometry';
 import { resolveLevelLaunch } from '../systems/level-launch';
 import { loadLevel, type LevelLoadResult, type LevelRuntime } from '../systems/LevelLoader';
 import { PlayerHealth } from '../systems/player-health';
@@ -70,6 +72,7 @@ export class GameScene extends Phaser.Scene {
   private collectionSystem: CollectionSystem | null = null;
   private enemySystem: EnemySystem | null = null;
   private bombSystem: BombSystem | null = null;
+  private effectSystem: EffectSystem | null = null;
   private health: PlayerHealth | null = null;
 
   private explicitLevelId: string | undefined;
@@ -93,6 +96,7 @@ export class GameScene extends Phaser.Scene {
     this.collectionSystem = null;
     this.enemySystem = null;
     this.bombSystem = null;
+    this.effectSystem = null;
     this.health = null;
   }
 
@@ -186,6 +190,11 @@ export class GameScene extends Phaser.Scene {
       this.respawnPlayer();
     }
 
+    if (this.effectSystem !== null && !document.hidden) {
+      this.effectSystem.update(delta);
+      this.gameHud?.updateEffects(this.effectSystem.active);
+    }
+
     const camera = this.cameras.main;
     const snapshot = this.debugHud === null ? null : this.collectionSystem?.snapshot;
     const enemySnapshot = this.debugHud === null ? null : this.enemySystem?.snapshot;
@@ -267,6 +276,16 @@ export class GameScene extends Phaser.Scene {
       collectibles: runtime.collectibles.group,
       scoring,
       onChanged: () => this.updateHud(),
+      onEffectPickup: (type) => this.effectSystem?.activate(type),
+    });
+
+    this.effectSystem = new EffectSystem({
+      scene: this,
+      player: this.player,
+      coins: runtime.collectibles.coins,
+      solids: solidTerrainRects(runtime.geometry),
+      collection: this.collectionSystem,
+      config: requireEffectsConfig(),
     });
 
     this.physics.add.overlap(
@@ -282,6 +301,7 @@ export class GameScene extends Phaser.Scene {
       solids: runtime.solids,
       combat,
       health: this.health,
+      absorbPlayerDamage: () => this.effectSystem?.absorbContact() ?? false,
       onChanged: () => this.updateHud(),
       onPlayerDamaged: () => this.updateHud(),
       onPlayerDefeated: () => this.handlePlayerDefeated(),
@@ -391,6 +411,7 @@ export class GameScene extends Phaser.Scene {
     const enemySnapshot = this.enemySystem?.snapshot;
 
     collection.freeze();
+    this.stopEffects();
     this.bombSystem?.freeze();
     this.enemySystem?.freeze();
     this.inputManager?.destroy();
@@ -474,6 +495,7 @@ export class GameScene extends Phaser.Scene {
     const snapshot = collection.snapshot;
 
     collection.freeze();
+    this.stopEffects();
     this.bombSystem?.freeze();
     this.enemySystem?.freeze();
     this.inputManager?.destroy();
@@ -517,11 +539,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleShutdown(): void {
-    // Physics colliders, bodies and display objects are owned and destroyed by
-    // the scene; only explicit system colliders and global input listeners need
-    // teardown.
+    // The scene owns the remaining bodies and display objects. Explicit
+    // systems release their callbacks, effects and input listeners here.
     this.enemySystem?.destroy();
     this.bombSystem?.destroy();
+    this.collectionSystem?.destroy();
+    this.stopEffects();
     this.bombSystem = null;
     this.enemySystem = null;
     this.collectionSystem = null;
@@ -539,5 +562,10 @@ export class GameScene extends Phaser.Scene {
     this.geometry = null;
     this.level = null;
     this.state = 'loading';
+  }
+
+  private stopEffects(): void {
+    this.effectSystem?.dispose();
+    this.effectSystem = null;
   }
 }

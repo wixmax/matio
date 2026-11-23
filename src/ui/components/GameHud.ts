@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../../core/constants';
+import type { ActiveEffects } from '../../systems/ActiveEffects';
 import type { CollectibleTotals } from '../../types/collectible';
 import { PALETTE, toCssColor } from '../theme';
 import { addUiText } from './ui-text';
@@ -28,11 +29,16 @@ export class GameHud {
   private readonly scoreText: Phaser.GameObjects.Text;
   private readonly healthText: Phaser.GameObjects.Text;
   private readonly bombsText: Phaser.GameObjects.Text;
+  private readonly shieldText: Phaser.GameObjects.Text;
+  private readonly magnetText: Phaser.GameObjects.Text;
 
   private lastCounters = '';
   private lastScore = '';
   private lastHealth = '';
   private lastBombs = '';
+  private shieldSeconds = 0;
+  private shieldCharges = 0;
+  private magnetSeconds = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -48,9 +54,9 @@ export class GameHud {
     const background = scene.add.graphics().setScrollFactor(0).setDepth(2100);
 
     background.fillStyle(PALETTE.ink, 0.42);
-    background.fillRoundedRect(centerX - 235, 10, 470, 120, 16);
+    background.fillRoundedRect(centerX - 235, 10, 470, 147, 16);
     background.lineStyle(3, PALETTE.white, 0.25);
-    background.strokeRoundedRect(centerX - 235, 10, 470, 120, 16);
+    background.strokeRoundedRect(centerX - 235, 10, 470, 147, 16);
 
     addUiText(scene, centerX, 18, levelName, {
       fontStyle: 'bold',
@@ -97,10 +103,39 @@ export class GameHud {
       stroke: toCssColor(PALETTE.ink), strokeThickness: 3,
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(2110);
 
+    const effectStyle = {
+      fontStyle: 'bold',
+      fontSize: '18px',
+      stroke: toCssColor(PALETTE.ink),
+      strokeThickness: 3,
+    };
+    this.shieldText = addUiText(scene, centerX - 105, 121, '', {
+      ...effectStyle, color: toCssColor(PALETTE.waterLight),
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(2110);
+    this.magnetText = addUiText(scene, centerX + 105, 121, '', {
+      ...effectStyle, color: toCssColor(PALETTE.sun),
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(2110);
+
     this.update(
       { coins: 0, stars: 0, score: 0, health: initialHealth, maxHealth, bombs: 0 },
       false,
     );
+  }
+
+  updateEffects(effects: ActiveEffects): void {
+    const shieldSeconds = Math.ceil(effects.remainingMs('shield') / 1000);
+    const magnetSeconds = Math.ceil(effects.remainingMs('magnet') / 1000);
+    const charges = effects.shieldCharges;
+
+    if (shieldSeconds !== this.shieldSeconds || charges !== this.shieldCharges) {
+      this.shieldSeconds = shieldSeconds;
+      this.shieldCharges = charges;
+      this.shieldText.setText(shieldSeconds > 0 ? `SHIELD  ${charges} · ${shieldSeconds}s` : '');
+    }
+    if (magnetSeconds !== this.magnetSeconds) {
+      this.magnetSeconds = magnetSeconds;
+      this.magnetText.setText(magnetSeconds > 0 ? `MAGNET  ${magnetSeconds}s` : '');
+    }
   }
 
   update(snapshot: GameHudSnapshot, pulse = true): void {

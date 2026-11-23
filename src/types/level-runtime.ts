@@ -1,4 +1,4 @@
-import type { LevelObjectType, TerrainType } from './level';
+import type { TerrainType } from './level';
 import type { CollectibleCounts, CollectiblePlacement } from './collectible';
 import type { EnemyPlacement } from './enemy';
 import type { ValidationError } from './validation';
@@ -54,7 +54,7 @@ export interface LevelGeometry {
   /** Goal marker anchor: bottom-center of the goal cell. */
   readonly goal: WorldPoint;
   readonly terrain: readonly TerrainPlacement[];
-  /** Coin/star objects converted to tile-center pixel positions. */
+  /** Coin/star and effect pickup objects converted to tile-center pixel positions. */
   readonly collectibles: readonly CollectiblePlacement[];
   readonly collectibleTotals: CollectibleCounts;
   /** Enemy objects converted to feet anchors and patrol pixel bounds. */
@@ -76,10 +76,6 @@ export interface CameraFrame {
   readonly followsY: boolean;
 }
 
-export interface IgnoredObjectSummary {
-  readonly total: number;
-  readonly byType: Partial<Record<LevelObjectType, number>>;
-}
 
 export type LevelFailureCode =
   | 'unknown-level'

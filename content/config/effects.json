@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "shield": {
+    "durationMs": 15000,
+    "maxCharges": 1,
+    "chargesPerPickup": 1
+  },
+  "magnet": {
+    "durationMs": 12000,
+    "radius": 180,
+    "attractionSpeed": 450,
+    "collectionDistance": 20
+  }
+}

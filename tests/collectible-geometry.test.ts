@@ -7,7 +7,6 @@ import {
   createCollectiblePlacements,
   createLevelGeometry,
   findSolidTerrainAtCell,
-  summarizeUnimplementedObjects,
 } from '../src/systems/level-geometry';
 import { parseLevelJson } from '../src/systems/level-validator';
 import type { LevelDefinition } from '../src/types/level';
@@ -76,16 +75,15 @@ describe('collectible geometry - tile centers', () => {
     expect(placements).toEqual([
       { key: 'coin:0', type: 'coin', x: 224, y: 224 },
       { key: 'star:1', type: 'star', x: 352, y: 160 },
+      { key: 'shield:3', type: 'shield', x: 480, y: 224 },
     ]);
     expect(createCollectiblePlacements(level)).toEqual(placements);
     expect(new Set(placements.map((placement) => placement.key)).size).toBe(placements.length);
   });
 
-  it('reports unimplemented object types separately from collectibles', () => {
-    const summary = summarizeUnimplementedObjects(createTestLevel());
-
-    expect(summary.total).toBe(1);
-    expect(summary.byType).toEqual({ shield: 1 });
+  it('uses the same center-cell convention for effect pickups', () => {
+    const [shield] = createCollectiblePlacements(createTestLevel()).filter(({ type }) => type === 'shield');
+    expect(shield).toEqual({ key: 'shield:3', type: 'shield', ...cellCenter({ x: 7, y: 3 }, 64) });
   });
 
   it('computes collectible totals from validated placements', () => {

@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { EnemiesConfig } from '../types/enemy';
 import type { LevelDefinition } from '../types/level';
 import type {
-  IgnoredObjectSummary,
   LevelGeometry,
   LevelLoadFailure,
 } from '../types/level-runtime';
@@ -16,7 +15,6 @@ import {
   createLevelGeometry,
   findSolidTerrainAtCell,
   solidTerrainRects,
-  summarizeUnimplementedObjects,
 } from './level-geometry';
 
 export interface LevelRuntime {
@@ -25,12 +23,10 @@ export interface LevelRuntime {
   readonly solids: Phaser.GameObjects.Rectangle[];
   readonly goal: GoalRuntime;
   readonly backdrop: Phaser.GameObjects.Graphics;
-  /** Coin/star instances and the group used for overlap. */
+  /** Score/effect pickup instances and the group used for overlap. */
   readonly collectibles: CollectibleRuntime;
   /** Enemy instances and the dynamic group used for collision/overlap. */
   readonly enemies: EnemyRuntime;
-  /** Valid future object types (shield/magnet) deliberately not created. */
-  readonly unimplementedObjects: IgnoredObjectSummary;
 }
 
 export interface LevelLoadOptions {
@@ -88,15 +84,24 @@ export function loadLevel(
     };
   }
 
-  const blockedBomb = level.objects.find((object) =>
-    object.type === 'bomb' && findSolidTerrainAtCell(level, object) !== null,
+  const blockedPickupIndex = level.objects.findIndex((object) =>
+    (object.type === 'bomb' || object.type === 'shield' || object.type === 'magnet') &&
+    findSolidTerrainAtCell(level, object) !== null,
   );
-  if (blockedBomb !== undefined) {
-    return { ok: false, error: {
-      code: 'invalid-level', levelId: level.id,
-      message: `Level "${level.id}" contains a bomb pickup inside solid terrain.`,
-      details: [{ path: '$.objects', message: `bomb pickup at (${blockedBomb.x}, ${blockedBomb.y}) must occupy an empty cell.` }],
-    } };
+  const blockedPickup = level.objects[blockedPickupIndex];
+  if (blockedPickup !== undefined) {
+    return {
+      ok: false,
+      error: {
+        code: 'invalid-level',
+        levelId: level.id,
+        message: `Level "${level.id}" contains a ${blockedPickup.type} pickup inside solid terrain.`,
+        details: [{
+          path: `$.objects[${blockedPickupIndex}]`,
+          message: `cell (${blockedPickup.x}, ${blockedPickup.y}) must be empty.`,
+        }],
+      },
+    };
   }
 
   const geometry = createLevelGeometry(level);
@@ -110,15 +115,7 @@ export function loadLevel(
     options.enemies,
     solidTerrainRects(geometry),
   );
-  const unimplementedObjects = summarizeUnimplementedObjects(level);
-
   if (import.meta.env.DEV) {
-    if (unimplementedObjects.total > 0) {
-      console.info(
-        `[LevelLoader] Level "${level.id}" contains ${unimplementedObjects.total} unimplemented object(s) (${formatObjectSummary(unimplementedObjects)}); they are preserved in JSON but not instantiated.`,
-      );
-    }
-
     console.info(
       `[LevelLoader] Level "${level.id}" collectibles: ${geometry.collectibleTotals.coins} coin(s), ${geometry.collectibleTotals.stars} collectible star(s); enemies: ${enemies.totalCount}.`,
     );
@@ -133,13 +130,6 @@ export function loadLevel(
       backdrop,
       collectibles,
       enemies,
-      unimplementedObjects,
     },
   };
-}
-
-function formatObjectSummary(summary: IgnoredObjectSummary): string {
-  return Object.entries(summary.byType)
-    .map(([type, count]) => `${type}: ${count}`)
-    .join(', ');
 }

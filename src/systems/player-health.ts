@@ -62,25 +62,22 @@ export class PlayerHealth {
     this.invulnerableRemainingMs = Math.max(0, this.invulnerableRemainingMs - deltaMs);
   }
 
+  canTakeDamage(amount: number): boolean {
+    return Number.isFinite(amount) && Math.trunc(amount) > 0 && !this.isDead && !this.invulnerable;
+  }
+
+  startInvulnerability(): void {
+    this.invulnerableRemainingMs = this.isDead ? 0 : this.invulnerabilityDurationMs;
+  }
+
   /** Applies damage unless invulnerable. Never goes below zero. */
   damage(amount: number): DamageResult {
-    if (!Number.isFinite(amount)) {
+    if (!this.canTakeDamage(amount)) {
       return this.result(false);
     }
 
-    const normalized = Math.trunc(amount);
-
-    if (normalized <= 0 || this.currentHealth <= 0 || this.invulnerable) {
-      return this.result(false);
-    }
-
-    this.currentHealth = clamp(this.currentHealth - normalized, 0, this.maxHealthValue);
-
-    if (this.currentHealth > 0) {
-      this.invulnerableRemainingMs = this.invulnerabilityDurationMs;
-    } else {
-      this.invulnerableRemainingMs = 0;
-    }
+    this.currentHealth = clamp(this.currentHealth - Math.trunc(amount), 0, this.maxHealthValue);
+    this.startInvulnerability();
 
     return this.result(true);
   }

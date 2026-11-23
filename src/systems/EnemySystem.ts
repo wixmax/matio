@@ -7,6 +7,7 @@ import { addUiText } from '../ui/components/ui-text';
 import { PALETTE, toCssColor } from '../ui/theme';
 import { classifyEnemyContact, resolveKnockbackDirection } from './combat-rules';
 import { explosionIntersectsRect } from './bomb-rules';
+import { resolveEnemyDamage } from './effect-rules';
 import { EnemyLedger } from './enemy-ledger';
 import type { PlayerHealth } from './player-health';
 
@@ -24,6 +25,7 @@ export interface EnemySystemOptions {
   readonly solids: readonly Phaser.GameObjects.Rectangle[];
   readonly combat: CombatConfig;
   readonly health: PlayerHealth;
+  readonly absorbPlayerDamage: () => boolean;
   readonly onChanged: (snapshot: EnemySnapshot) => void;
   readonly onPlayerDamaged: (health: HealthSnapshot) => void;
   readonly onPlayerDefeated: () => void;
@@ -47,6 +49,7 @@ export class EnemySystem {
   private readonly runtime: EnemyRuntime;
   private readonly combat: CombatConfig;
   private readonly health: PlayerHealth;
+  private readonly absorbPlayerDamage: () => boolean;
   private readonly onChanged: (snapshot: EnemySnapshot) => void;
   private readonly onPlayerDamaged: (health: HealthSnapshot) => void;
   private readonly onPlayerDefeated: () => void;
@@ -62,6 +65,7 @@ export class EnemySystem {
     this.runtime = options.runtime;
     this.combat = options.combat;
     this.health = options.health;
+    this.absorbPlayerDamage = options.absorbPlayerDamage;
     this.onChanged = options.onChanged;
     this.onPlayerDamaged = options.onPlayerDamaged;
     this.onPlayerDefeated = options.onPlayerDefeated;
@@ -192,9 +196,9 @@ export class EnemySystem {
   }
 
   private resolvePlayerDamage(enemy: Enemy): void {
-    const result = this.health.damage(enemy.definition.damage);
+    const result = resolveEnemyDamage(this.health, enemy.definition.damage, this.absorbPlayerDamage);
 
-    if (!result.applied) {
+    if (result === 'ignored' || result === 'absorbed') {
       return;
     }
 
@@ -212,7 +216,7 @@ export class EnemySystem {
 
     this.onPlayerDamaged(this.health.snapshot);
 
-    if (result.died) {
+    if (result === 'defeated') {
       this.onPlayerDefeated();
     }
   }
