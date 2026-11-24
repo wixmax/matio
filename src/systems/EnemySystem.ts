@@ -119,6 +119,16 @@ export class EnemySystem {
     }
   }
 
+  /**
+   * Direct-hit damage for projectiles. Routes through the same health and
+   * EnemyLedger path as stomps and explosions, so score settles once and dead
+   * enemies cannot be damaged again.
+   */
+  damageEnemy(enemy: Enemy, damage: number): boolean {
+    if (this.frozen || !enemy.active || !enemy.isAlive) return false;
+    return this.applyDamage(enemy, damage);
+  }
+
   /** Advances invulnerability and every living enemy's patrol. */
   update(deltaMs: number): void {
     if (this.frozen) {

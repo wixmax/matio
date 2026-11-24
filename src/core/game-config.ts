@@ -19,6 +19,8 @@ import type { PlayerConfig } from '../types/player-config';
  * - Arcade Physics is enabled here with gravity sourced from validated external
  *   configuration (`content/config/player.json`), never from scene code.
  * - Four active pointers allow left + right + jump + one spare simultaneously.
+ * - Five active pointers cover simultaneous direction, jump and the two
+ *   independent throw/fire controls.
  */
 export function createGameConfig(playerConfig: PlayerConfig): Phaser.Types.Core.GameConfig {
   return {
@@ -48,7 +50,7 @@ export function createGameConfig(playerConfig: PlayerConfig): Phaser.Types.Core.
       mouse: true,
       touch: true,
       gamepad: false,
-      activePointers: 4,
+      activePointers: 5,
       windowEvents: true,
     },
     physics: {

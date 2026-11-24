@@ -11,6 +11,7 @@ import { requireEffectsConfig } from '../core/effects-config';
 import { requireEnemiesConfig } from '../core/enemies-config';
 import { requirePlayerConfig } from '../core/player-config';
 import { requirePlayerFormsConfig } from '../core/player-forms-config';
+import { requireWeaponConfig } from '../core/weapon-config';
 import { getLevelRepository } from '../core/level-repository';
 import { getSaveStore } from '../core/save-store';
 import { requireScoringConfig } from '../core/scoring-config';
@@ -20,6 +21,7 @@ import { CollectionSystem } from '../systems/CollectionSystem';
 import { EnemySystem } from '../systems/EnemySystem';
 import { BombSystem } from '../systems/BombSystem';
 import { EffectSystem } from '../systems/EffectSystem';
+import { EnergyBallSystem } from '../systems/EnergyBallSystem';
 import {
   canStartCompletion,
   canStartGameOver,
@@ -74,6 +76,7 @@ export class GameScene extends Phaser.Scene {
   private enemySystem: EnemySystem | null = null;
   private bombSystem: BombSystem | null = null;
   private effectSystem: EffectSystem | null = null;
+  private energyBallSystem: EnergyBallSystem | null = null;
   private health: PlayerHealth | null = null;
 
   private explicitLevelId: string | undefined;
@@ -98,6 +101,7 @@ export class GameScene extends Phaser.Scene {
     this.enemySystem = null;
     this.bombSystem = null;
     this.effectSystem = null;
+    this.energyBallSystem = null;
     this.health = null;
   }
 
@@ -182,6 +186,7 @@ export class GameScene extends Phaser.Scene {
     this.player.tick(delta, input);
     this.enemySystem?.update(delta);
     this.bombSystem?.update(delta);
+    this.energyBallSystem?.update(delta);
 
     const fallLimit =
       this.geometry.worldHeight + FALL_RESPAWN_MARGIN_TILES * this.geometry.tileSize;
@@ -195,6 +200,9 @@ export class GameScene extends Phaser.Scene {
       this.gameHud?.updateEffects(this.effectSystem.active, this.effectSystem.transformation.pending);
     }
     if (this.inputManager.consumeThrowRequest()) this.bombSystem?.throw();
+    if (this.inputManager.consumeFireRequest()) this.energyBallSystem?.fire();
+
+    this.gameHud?.updateWeapon(this.energyBallSystem?.remainingMs ?? 0);
 
     const camera = this.cameras.main;
     const snapshot = this.debugHud === null ? null : this.collectionSystem?.snapshot;
@@ -280,6 +288,9 @@ export class GameScene extends Phaser.Scene {
       scoring,
       onChanged: () => this.updateHud(),
       onEffectPickup: (type) => this.effectSystem?.activate(type),
+      onWeaponPickup: (weaponId) => {
+        if (weaponId === this.energyBallSystem?.weaponId) this.energyBallSystem.activate();
+      },
     });
 
     this.effectSystem = new EffectSystem({
@@ -314,6 +325,17 @@ export class GameScene extends Phaser.Scene {
     });
     this.bombSystem = new BombSystem(this, level, this.player, this.enemySystem,
       runtime.solids, requireBombConfig(), () => this.updateHud());
+
+    this.energyBallSystem = new EnergyBallSystem({
+      scene: this,
+      player: this.player,
+      enemies: this.enemySystem,
+      enemyGroup: runtime.enemies.group,
+      effects: this.effectSystem.active,
+      settings: requireWeaponConfig().weapons['energy-ball'],
+      world: runtime.geometry,
+      solids: runtime.solids,
+    });
 
     this.configureCamera(runtime.geometry, this.player);
 
@@ -420,6 +442,7 @@ export class GameScene extends Phaser.Scene {
     collection.freeze();
     this.stopEffects();
     this.bombSystem?.freeze();
+    this.energyBallSystem?.freeze();
     this.enemySystem?.freeze();
     this.inputManager?.destroy();
     this.inputManager = null;
@@ -504,6 +527,7 @@ export class GameScene extends Phaser.Scene {
     collection.freeze();
     this.stopEffects();
     this.bombSystem?.freeze();
+    this.energyBallSystem?.freeze();
     this.enemySystem?.freeze();
     this.inputManager?.destroy();
     this.inputManager = null;
@@ -550,9 +574,11 @@ export class GameScene extends Phaser.Scene {
     // systems release their callbacks, effects and input listeners here.
     this.enemySystem?.destroy();
     this.bombSystem?.destroy();
+    this.energyBallSystem?.destroy();
     this.collectionSystem?.destroy();
     this.stopEffects();
     this.bombSystem = null;
+    this.energyBallSystem = null;
     this.enemySystem = null;
     this.collectionSystem = null;
     this.health = null;

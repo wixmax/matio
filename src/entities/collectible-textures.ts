@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { CollectiblePickupType, EffectPickupType } from '../types/collectible';
+import type { CollectiblePickupType } from '../types/collectible';
 import { PALETTE } from '../ui/theme';
 
 /**
@@ -15,6 +15,7 @@ export const COLLECTIBLE_FRAME = {
   shield: { width: 40, height: 40, bodyWidth: 30, bodyHeight: 32 },
   magnet: { width: 40, height: 40, bodyWidth: 30, bodyHeight: 32 },
   'growth-mushroom': { width: 40, height: 40, bodyWidth: 30, bodyHeight: 32 },
+  'energy-flower': { width: 40, height: 40, bodyWidth: 30, bodyHeight: 32 },
 } as const;
 
 export const COLLECTIBLE_TEXTURES: Readonly<Record<CollectiblePickupType, string>> = {
@@ -23,9 +24,13 @@ export const COLLECTIBLE_TEXTURES: Readonly<Record<CollectiblePickupType, string
   shield: 'matio-collectible-shield',
   magnet: 'matio-collectible-magnet',
   'growth-mushroom': 'matio-collectible-growth-mushroom',
+  'energy-flower': 'matio-collectible-energy-flower',
 };
 
-export function ensureEffectPickupTexture(scene: Phaser.Scene, type: EffectPickupType): void {
+/** Effect/power-up/weapon pickups share one procedural drawing entry point. */
+export type NonScoringPickupType = Exclude<CollectiblePickupType, 'coin' | 'star'>;
+
+export function ensureEffectPickupTexture(scene: Phaser.Scene, type: NonScoringPickupType): void {
   const key = COLLECTIBLE_TEXTURES[type];
   if (scene.textures.exists(key)) return;
 
@@ -52,6 +57,26 @@ export function ensureEffectPickupTexture(scene: Phaser.Scene, type: EffectPicku
     graphics.fillStyle(PALETTE.white);
     graphics.fillRect(7, 9, 9, 7);
     graphics.fillRect(24, 9, 9, 7);
+  } else if (type === 'energy-flower') {
+    // Stem, leaves and a glowing core: readable over grass and stone.
+    graphics.lineStyle(4, PALETTE.grassDark);
+    graphics.lineBetween(20, 38, 20, 22);
+    graphics.fillStyle(PALETTE.grass);
+    graphics.fillEllipse(12, 30, 15, 8);
+    graphics.fillEllipse(28, 28, 15, 8);
+    graphics.fillStyle(PALETTE.waterLight, 0.35);
+    graphics.fillCircle(20, 15, 16);
+    graphics.fillStyle(PALETTE.accent);
+    for (let petal = 0; petal < 6; petal += 1) {
+      const angle = (Math.PI / 3) * petal;
+      graphics.fillCircle(20 + Math.cos(angle) * 9, 15 + Math.sin(angle) * 9, 6);
+    }
+    graphics.fillStyle(PALETTE.sun);
+    graphics.fillCircle(20, 15, 7);
+    graphics.fillStyle(PALETTE.white);
+    graphics.fillCircle(17, 12, 2.4);
+    graphics.lineStyle(2, PALETTE.ink, 0.85);
+    graphics.strokeCircle(20, 15, 8);
   } else {
     graphics.fillStyle(PALETTE.ink);
     graphics.fillRoundedRect(10, 18, 20, 18, 6);

@@ -32,6 +32,7 @@ export class GameHud {
   private readonly shieldText: Phaser.GameObjects.Text;
   private readonly magnetText: Phaser.GameObjects.Text;
   private readonly growthText: Phaser.GameObjects.Text;
+  private readonly energyText: Phaser.GameObjects.Text;
 
   private lastCounters = '';
   private lastScore = '';
@@ -42,6 +43,7 @@ export class GameHud {
   private magnetSeconds = 0;
   private growthSeconds = 0;
   private growthPending = false;
+  private energySeconds = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -57,9 +59,9 @@ export class GameHud {
     const background = scene.add.graphics().setScrollFactor(0).setDepth(2100);
 
     background.fillStyle(PALETTE.ink, 0.42);
-    background.fillRoundedRect(centerX - 235, 10, 470, 173, 16);
+    background.fillRoundedRect(centerX - 235, 10, 470, 196, 16);
     background.lineStyle(3, PALETTE.white, 0.25);
-    background.strokeRoundedRect(centerX - 235, 10, 470, 173, 16);
+    background.strokeRoundedRect(centerX - 235, 10, 470, 196, 16);
 
     addUiText(scene, centerX, 18, levelName, {
       fontStyle: 'bold',
@@ -121,6 +123,9 @@ export class GameHud {
     this.growthText = addUiText(scene, centerX, 148, '', {
       ...effectStyle, fontSize: '20px', color: toCssColor(PALETTE.white),
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(2110).setVisible(false);
+    this.energyText = addUiText(scene, centerX, 176, '', {
+      ...effectStyle, fontSize: '20px', color: toCssColor(PALETTE.waterLight),
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(2110).setVisible(false);
 
     this.update(
       { coins: 0, stars: 0, score: 0, health: initialHealth, maxHealth, bombs: 0 },
@@ -150,6 +155,22 @@ export class GameHud {
       this.growthText.setText(growthPending ? 'PENDING GROWTH' : text)
         .setVisible(growthPending || growthSeconds > 0);
     }
+  }
+
+  /** Rewrites the ENERGY line only when the whole-second value changes. */
+  updateWeapon(remainingMs: number): void {
+    const seconds = Number.isFinite(remainingMs) && remainingMs > 0
+      ? Math.ceil(remainingMs / 1000)
+      : 0;
+
+    if (seconds === this.energySeconds) {
+      return;
+    }
+
+    this.energySeconds = seconds;
+    this.energyText
+      .setText(seconds > 0 ? `ENERGY · ${seconds}s` : '')
+      .setVisible(seconds > 0);
   }
 
   update(snapshot: GameHudSnapshot, pulse = true): void {

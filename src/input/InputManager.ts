@@ -17,6 +17,8 @@ const CAPTURED_KEY_CODES = [
   Phaser.Input.Keyboard.KeyCodes.SPACE,
   Phaser.Input.Keyboard.KeyCodes.X,
   Phaser.Input.Keyboard.KeyCodes.J,
+  Phaser.Input.Keyboard.KeyCodes.C,
+  Phaser.Input.Keyboard.KeyCodes.K,
 ];
 
 const NEUTRAL_INPUT: PlayerInputState = {
@@ -50,12 +52,15 @@ export class InputManager {
   private readonly keyReset: Phaser.Input.Keyboard.Key | null;
   private readonly keyThrowX: Phaser.Input.Keyboard.Key;
   private readonly keyThrowJ: Phaser.Input.Keyboard.Key;
+  private readonly keyFireC: Phaser.Input.Keyboard.Key;
+  private readonly keyFireK: Phaser.Input.Keyboard.Key;
   private readonly registeredKeys: Phaser.Input.Keyboard.Key[] = [];
 
   private inputState: PlayerInputState = NEUTRAL_INPUT;
   private previousJumpHeld = false;
   private resetRequested = false;
   private throwRequested = false;
+  private fireRequested = false;
   private destroyed = false;
 
   constructor(scene: Phaser.Scene, options: InputManagerOptions = {}) {
@@ -86,6 +91,8 @@ export class InputManager {
     this.keyJumpSpace = addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyThrowX = addKey(Phaser.Input.Keyboard.KeyCodes.X);
     this.keyThrowJ = addKey(Phaser.Input.Keyboard.KeyCodes.J);
+    this.keyFireC = addKey(Phaser.Input.Keyboard.KeyCodes.C);
+    this.keyFireK = addKey(Phaser.Input.Keyboard.KeyCodes.K);
     this.keyReset =
       options.enableResetKey === true ? addKey(Phaser.Input.Keyboard.KeyCodes.R) : null;
 
@@ -138,6 +145,13 @@ export class InputManager {
     const touchThrowPressed = this.touchControls?.consumeThrowPressed() ?? false;
     this.throwRequested ||= xPressed || jPressed || touchThrowPressed;
 
+    // Fire is an independent edge event, so holding it never repeats and a
+    // simultaneous throw/fire press cannot swallow the other action.
+    const cPressed = Phaser.Input.Keyboard.JustDown(this.keyFireC);
+    const kPressed = Phaser.Input.Keyboard.JustDown(this.keyFireK);
+    const touchFirePressed = this.touchControls?.consumeFirePressed() ?? false;
+    this.fireRequested ||= cPressed || kPressed || touchFirePressed;
+
     if (this.keyReset !== null && Phaser.Input.Keyboard.JustDown(this.keyReset)) {
       this.resetRequested = true;
     }
@@ -150,6 +164,13 @@ export class InputManager {
   consumeThrowRequest(): boolean {
     const requested = this.throwRequested;
     this.throwRequested = false;
+    return requested;
+  }
+
+  /** Returns true once per C/K or touch FIRE press. */
+  consumeFireRequest(): boolean {
+    const requested = this.fireRequested;
+    this.fireRequested = false;
     return requested;
   }
 
@@ -195,6 +216,7 @@ export class InputManager {
     this.previousJumpHeld = false;
     this.resetRequested = false;
     this.throwRequested = false;
+    this.fireRequested = false;
   }
 
   private readonly handleFocusLost = (): void => {
@@ -206,6 +228,7 @@ export class InputManager {
     this.resetRequested = false;
 
     this.throwRequested = false;
+    this.fireRequested = false;
     this.onFocusLost?.();
   };
 

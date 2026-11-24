@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "weapons": {
+    "energy-ball": {
+      "damage": 1,
+      "speed": 430,
+      "initialVelocityY": -80,
+      "gravity": 1100,
+      "bounce": 0.75,
+      "cooldownMs": 350,
+      "lifetimeMs": 2500,
+      "maxActiveProjectiles": 2,
+      "maxTargets": 1,
+      "durationMs": 20000
+    }
+  }
+}

@@ -18,8 +18,8 @@
 5. Check Phaser 4 APIs before using them: `node_modules/phaser/types/phaser.d.ts` or
    `node_modules/phaser/skills/<topic>/SKILL.md`. Do not copy Phaser 3 code from memory.
 6. For gameplay changes, identify the config/content involved: `player.json`, `enemies.json`,
-   `combat.json`, `bombs.json`, `effects.json`, `player-forms.json`, `scoring.json`, `level-order.json`, level JSON and
-   the save schema are validated content, not inline constants.
+   `combat.json`, `bombs.json`, `effects.json`, `player-forms.json`, `weapons.json`, `scoring.json`,
+   `level-order.json`, level JSON and the save schema are validated content, not inline constants.
 
 ## 3. Implementation loop
 
@@ -46,7 +46,11 @@ Rules of thumb:
 | `npm run typecheck` | After every TypeScript change |
 | `npm run test` | After logic/content changes, and before handoff |
 | `npm run build` | Before handoff, to catch bundling and config issues |
+| `npm run verify` | Before handoff: typecheck → tests → production build |
 | `npm run preview` | To sanity-check the production bundle if needed |
+
+`npm run verify` is not a browser test. Scene, input, physics and visual changes still need a
+real-browser check (and forced-touch checks where relevant).
 
 The dev server uses port **5173** with `strictPort`. If the port is taken, stop the other process
 instead of changing the port, so review instructions remain stable.
@@ -64,6 +68,10 @@ overhang, effect refresh and expiry, combat, bombs, shield and magnet, and the
 fall, Retry, Victory and Game Over paths. For a manual ceiling check in level 02,
 approach the mushroom at (56, 14) from the ground on its right and retreat right
 when the HUD shows `PENDING GROWTH`.
+
+Open `/tests/energy-ball-browser.html?touch=1` for scripted Energy Ball checks: flower activation,
+HUD, C/K edge input, cooldown/active limits, bounce/wall/ceiling/lifetime cleanup, fall preservation,
+all three enemy archetypes, shared bomb damage, terminal cleanup, touch FIRE and scene restarts.
 
 ## 5. Coding standards
 
@@ -169,6 +177,20 @@ For enemy/combat work:
 10. Finish a level: final score includes coins + collectible stars + enemy points + completion.
 11. Restart several scenes: collider count, enemy set and input-key count stay constant.
 
+For weapon/Energy Ball work:
+
+1. Collect an energy flower; the HUD shows `ENERGY · 20s`, pressing C or K fires once, and holding
+   either key does not repeat.
+2. Confirm one press per new input, cooldown, two-projectile cap and one target per projectile.
+3. Watch a ball bounce from a floor/platform top; confirm a wall, block side or ceiling destroys it.
+4. Confirm natural lifetime expiry and out-of-world cleanup (no lingering bodies/graphics).
+5. Defeat a mushroom in one hit, a snail in two separate hits, and a spiky with the ball; verify
+   score is awarded once on the shared path and bombs still work on the same enemy.
+6. Fall: ability/time and collected flower remain. Retry/Victory/Game Over clear the ability and
+   remove projectiles.
+7. With `?touch=1`, hold RIGHT + JUMP + THROW + FIRE together, release one at a time, slide off a
+   button and blur the window; no stuck control and no duplicate listeners after restart.
+
 For collectible/progression/save work:
 
 1. Confirm coins and collectible stars render at JSON cell centers and inside no solid terrain.
@@ -228,6 +250,7 @@ Before handing off, confirm:
 - [ ] TypeScript: `npm run typecheck` passes.
 - [ ] Tests: `npm run test` passes, with new coverage for new logic.
 - [ ] Build: `npm run build` succeeds.
+- [ ] Verify: `npm run verify` passes (it does not replace browser checks).
 - [ ] Runtime: `npm run dev` boots; expected navigation/interaction was observed.
 - [ ] Physics/input: movement, jump, platforms, respawn and release-to-stop were exercised.
 - [ ] Touch: forced controls show; LEFT/RIGHT/JUMP and multitouch were exercised (state whether on a
@@ -237,6 +260,8 @@ Before handing off, confirm:
 - [ ] Collectibles: JSON-driven, tile-center anchors, collected once, HUD/score updated once.
 - [ ] Enemies: JSON archetypes/placements, feet anchors, patrol bounds/ledges, terrain collision.
 - [ ] Combat: stomp vs damage exclusive, spiky not stompable, multi-hit enemies, score once.
+- [ ] Weapons: flower activation/refresh, edge input, cooldown/limits, bounce/wall/ceiling, lifetime,
+      enemy damage once, terminal cleanup, touch FIRE.
 - [ ] Health: clamping, 1000 ms invulnerability, knockback/flash/input lock, HUD update on change.
 - [ ] Game Over: transitions once, freezes collection/victory, writes no record, RETRY restores all.
 - [ ] Respawn: health/collected objects/score/enemies preserved; Retry starts a fresh run.

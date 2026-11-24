@@ -90,6 +90,8 @@
     { "type": "coin", "x": 88, "y": 13 },
     { "id": "growth-01", "type": "growth-mushroom", "x": 1, "y": 14 },
     { "id": "growth-02", "type": "growth-mushroom", "x": 25, "y": 14 },
+    { "id": "energy-flower-01", "type": "energy-flower", "x": 10, "y": 12 },
+    { "id": "energy-flower-02", "type": "energy-flower", "x": 56, "y": 13 },
     {
       "id": "mushroom-01",
       "type": "enemy",

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Collectible } from '../entities/Collectible';
 import { isCollectibleType, type CollectibleCounts } from '../types/collectible';
 import type { EffectType } from '../types/effects';
+import { isWeaponPickupType, WEAPON_PICKUP_TO_WEAPON, type WeaponId } from '../types/weapon';
 import type { ScoringConfig } from '../types/scoring';
 import { addUiText } from '../ui/components/ui-text';
 import { PALETTE, toCssColor } from '../ui/theme';
@@ -20,6 +21,8 @@ export interface CollectionSystemOptions {
   readonly scoring: ScoringConfig;
   readonly onChanged: (snapshot: CollectionSnapshot) => void;
   readonly onEffectPickup: (type: EffectType) => void;
+  /** Weapon pickups activate a temporary ability instead of scoring. */
+  readonly onWeaponPickup: (weaponId: WeaponId) => void;
 }
 
 /**
@@ -35,6 +38,7 @@ export class CollectionSystem {
   private readonly scoring: ScoringConfig;
   private readonly onChanged: (snapshot: CollectionSnapshot) => void;
   private readonly onEffectPickup: (type: EffectType) => void;
+  private readonly onWeaponPickup: (weaponId: WeaponId) => void;
   private readonly overlap: Phaser.Physics.Arcade.Collider;
   private readonly ledger = new CollectionLedger();
 
@@ -45,6 +49,7 @@ export class CollectionSystem {
     this.scoring = options.scoring;
     this.onChanged = options.onChanged;
     this.onEffectPickup = options.onEffectPickup;
+    this.onWeaponPickup = options.onWeaponPickup;
 
     this.overlap = options.scene.physics.add.overlap(
       options.player,
@@ -86,6 +91,13 @@ export class CollectionSystem {
     }
 
     const type = target.collectibleType;
+
+    if (isWeaponPickupType(type)) {
+      // Idempotency already ran in Collectible.collect(); abilities never score.
+      this.onWeaponPickup(WEAPON_PICKUP_TO_WEAPON[type]);
+      return;
+    }
+
     if (!isCollectibleType(type)) {
       this.onEffectPickup(type === 'growth-mushroom' ? 'growth' : type);
       return;

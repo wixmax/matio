@@ -1,5 +1,10 @@
 # Level Format — schema version 1
 
+Energy flowers use the same flat item object, for example
+`{ "id": "energy-flower-01", "type": "energy-flower", "x": 5, "y": 10 }`.
+Coordinates identify the cell center. They grant the temporary Energy Ball ability
+(tuning in `content/config/weapons.json`), award no score and do not affect rating.
+
 Bomb pickups use the existing schema-1 item object, for example
 `{ "id": "bomb-01", "type": "bomb", "x": 7, "y": 12 }`. Coordinates
 identify the cell center. Place them in empty, reachable cells. Pickups add one
@@ -18,8 +23,8 @@ time; adding a valid file is enough to register a playable level.
 
 Status: schema 1 is implemented end-to-end (discovery, validation, terrain, colliders, collectibles,
 enemies, goal completion, camera, respawn, combat, scoring/rating, progression, save and error view).
-All seven schema-1 object types are instantiated. Shield, magnet and growth mushrooms use the
-existing item shape.
+All eight schema-1 object types are instantiated. Shield, magnet, growth mushrooms and energy flowers
+use the existing item shape.
 
 ## 1. Coordinate system and anchors
 
@@ -84,11 +89,11 @@ loading without changing the JSON contract.
 
 Shipped levels:
 
-| ID | File | Name | Size (tiles) | Coins | Stars | Enemies | Growth mushrooms |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | (11, 11) |
-| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | (56, 14) |
-| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | (1, 14), (25, 14) |
+| ID | File | Name | Size (tiles) | Coins | Stars | Enemies | Growth mushrooms | Energy flowers |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | (11, 11) | (5, 10) |
+| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | (56, 14) | (21, 14), (46, 14) |
+| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | (1, 14), (25, 14) | (10, 12), (56, 13) |
 
 The **default level** is `world-01-level-01` (`DEFAULT_LEVEL_ID`).
 
@@ -148,9 +153,8 @@ for performance.
 
 ## 5. Object behavior
 
-The schema accepts `coin`, `star`, `enemy`, `bomb`, `shield`, `magnet` and
-`growth-mushroom` objects with optional
-unique IDs.
+The schema accepts `coin`, `star`, `enemy`, `bomb`, `shield`, `magnet`, `growth-mushroom` and
+`energy-flower` objects with optional unique IDs.
 
 | Type | Implemented | Behavior |
 | --- | --- | --- |
@@ -161,6 +165,7 @@ unique IDs.
 | `shield` | yes | Refreshes the temporary shield and replenishes charges |
 | `magnet` | yes | Refreshes temporary attraction of nearby, reachable coins |
 | `growth-mushroom` | yes | Queues a temporary big form or refreshes active growth |
+| `energy-flower` | yes | Grants/refreshes the temporary Energy Ball ability, with no score |
 
 Rules:
 
@@ -174,10 +179,14 @@ Rules:
 - Add power-ups to the `objects` array with a unique optional ID, for example
   `{ "id": "shield-01", "type": "shield", "x": 6, "y": 12 }` or
   `{ "id": "magnet-01", "type": "magnet", "x": 8, "y": 11 }`. Use reachable empty
-  cells. LevelLoader reports the path to any bomb, shield, magnet or growth mushroom inside
-  solid terrain.
+  cells. LevelLoader reports the path to any bomb, shield, magnet, growth mushroom or energy flower
+  inside solid terrain.
   Shield and magnet tuning lives in `content/config/effects.json`. These pickups grant
   zero points and are excluded from coin/star totals.
+- Energy flowers use `{ "id": "energy-flower-01", "type": "energy-flower", "x": 5, "y": 10 }`.
+  They are centered, non-solid, worth zero score and grant the temporary Energy Ball ability
+  (cooldown, limits and duration in `content/config/weapons.json`).
+  A second flower refreshes the full duration; it never stacks damage.
 
 Growth uses the flat item variant
 `{ "id": "growth-01", "type": "growth-mushroom", "x": 11, "y": 11 }`.
@@ -258,7 +267,7 @@ Archetype balance (health, speed, stompable, damage, score) is **not** authored 
 ```
 
 The shipped level 01 contains 12 coins, 2 collectible stars, 3 enemies, 2 bomb pickups,
-one shield, one magnet and one growth mushroom. All placements use the same JSON
+one shield, one magnet, one growth mushroom and one energy flower. All placements use the same JSON
 array and share duplicate-ID validation.
 
 ## 7. Validation and loading errors
@@ -319,7 +328,8 @@ Earlier schema-1 levels are still valid without growth objects.
    (roughly 100–110 px / 1.5 tiles with current tuning) and gaps within a running jump
    (roughly 3 tiles / 192 px).
 6. Add `coin`/`star` objects in empty cells after the path. Place at least one star on an optional
-   platform. Put bomb, shield and magnet pickups in empty cells on reachable routes.
+   platform. Put bomb, shield, magnet, growth mushroom and energy flower pickups in empty cells on
+   reachable routes.
 7. Optionally add `enemy` objects: empty cell, solid ground directly below, archetype from
    `content/config/enemies.json`, ordered patrol columns containing the enemy cell. Keep the spawn
    cell clear and add the new ID to `content/config/level-order.json` if it belongs to the campaign.
@@ -385,6 +395,7 @@ top is also 704, so the player starts standing correctly.
 - `content/config/scoring.json` holds coin/star/completion points and the 2-star coin ratio.
 - `content/config/enemies.json` holds archetype balance; `content/config/combat.json` holds player
   health, invulnerability, knockback, stomp bounce and contact tolerance.
+- `content/config/weapons.json` holds implemented weapon tuning and temporary ability duration.
 - `content/config/level-order.json` holds the campaign order.
 - `matio.save.v1` in localStorage holds a versioned save. Menu displays unlocked levels and best
   ratings; GameScene/ResultScene read the same validated store.

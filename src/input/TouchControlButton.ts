@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { PALETTE } from '../ui/theme';
 
-export type TouchControlIcon = 'left' | 'right' | 'jump' | 'throw';
+export type TouchControlIcon = 'left' | 'right' | 'jump' | 'throw' | 'fire';
 
 export interface TouchControlButtonOptions {
   readonly icon: TouchControlIcon;
@@ -125,6 +125,20 @@ export class TouchControlButton extends Phaser.GameObjects.Container {
       case 'throw':
         this.background.fillCircle(0, 5, radius * 0.32);
         this.background.fillRect(-4, -radius * 0.42, 8, radius * 0.2);
+        break;
+      case 'fire':
+        // Energy orb with a short tail: visually distinct from the bomb.
+        this.background.fillCircle(0, 0, radius * 0.24);
+        this.background.lineStyle(3, PALETTE.white, this.pressed ? 1 : 0.8);
+        this.background.strokeCircle(0, 0, radius * 0.4);
+        this.background.fillTriangle(
+          -radius * 0.62,
+          0,
+          -radius * 0.34,
+          -radius * 0.14,
+          -radius * 0.34,
+          radius * 0.14,
+        );
         break;
     }
   }

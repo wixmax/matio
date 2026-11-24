@@ -86,7 +86,7 @@ export function loadLevel(
 
   const blockedPickupIndex = level.objects.findIndex((object) =>
     (object.type === 'bomb' || object.type === 'shield' || object.type === 'magnet' ||
-      object.type === 'growth-mushroom') &&
+      object.type === 'growth-mushroom' || object.type === 'energy-flower') &&
     findSolidTerrainAtCell(level, object) !== null,
   );
   const blockedPickup = level.objects[blockedPickupIndex];
@@ -96,7 +96,7 @@ export function loadLevel(
       error: {
         code: 'invalid-level',
         levelId: level.id,
-        message: `Level "${level.id}" contains a ${blockedPickup.type} pickup inside solid terrain.`,
+        message: `Level "${level.id}" contains a pickup of type "${blockedPickup.type}" inside solid terrain.`,
         details: [{
           path: `$.objects[${blockedPickupIndex}]`,
           message: `cell (${blockedPickup.x}, ${blockedPickup.y}) must be empty.`,

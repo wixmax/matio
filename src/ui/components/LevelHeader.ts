@@ -38,8 +38,8 @@ export class LevelHeader {
       26,
       72,
       import.meta.env.DEV
-        ? 'MOVE: LEFT/RIGHT or A/D   ·   JUMP: SPACE or W/UP   ·   THROW: X/J   ·   RESET: R (dev)'
-        : 'MOVE: LEFT/RIGHT or A/D   ·   JUMP: SPACE or W/UP   ·   THROW: X/J',
+        ? 'MOVE: LEFT/RIGHT or A/D   ·   JUMP: SPACE or W/UP   ·   THROW: X/J   ·   FIRE: C/K   ·   RESET: R (dev)'
+        : 'MOVE: LEFT/RIGHT or A/D   ·   JUMP: SPACE or W/UP   ·   THROW: X/J   ·   FIRE: C/K',
       {
         fontStyle: 'bold',
         fontSize: '14px',

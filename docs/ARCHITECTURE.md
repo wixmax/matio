@@ -1,5 +1,39 @@
 # Architecture
 
+## Task 007-B Energy Ball and weapon extension
+
+`content/config/weapons.json` (schema 1) is validated before boot. The registry contains exactly the
+implemented `energy-ball` entry; unknown weapon IDs are rejected because each weapon still needs
+runtime code. Tuning fields are damage, speed, initial vertical velocity, net gravity, bounce,
+cooldown, lifetime, active-projectile limit, target limit and ability duration. `WEAPON_PICKUP_TO_WEAPON`
+maps level pickup types to weapon IDs.
+
+`energy-flower` is a validated level object placed at the tile center, non-solid, worth zero score.
+`CollectionSystem` keeps its entity idempotency guard and routes the pickup through the new
+`onWeaponPickup` callback; `EnergyBallSystem.activate()` grants or refreshes the window in
+`ActiveEffects` (one clock per attempt, no save state). Fall respawn keeps the window and collected
+pickup; Victory, Game Over and shutdown freeze and dispose it; Retry builds a fresh run.
+
+`EnergyBallSystem` owns the Arcade group, the terrain collider, the enemy overlap, lifetime and impact
+visuals. `EnergyBall` owns only its body tuning, expiry and per-projectile target set. Sprites are
+added to the physics group first and tuned afterwards because Arcade insertion can reset body
+velocity, gravity and bounce. Floor/platform tops bounce with the configured coefficient; wall, block
+side and ceiling contacts destroy the projectile; lifetime and an out-of-world margin clean up the
+rest. Water has no body, so projectiles pass through it. Collider callbacks resolve the projectile and
+enemy from either argument because Arcade does not guarantee their order.
+
+Direct hits call `EnemySystem.damageEnemy()`, which reuses `Enemy.takeDamage()` and `EnemyLedger`, so
+defeat score is still recorded once. A projectile can damage the same enemy key at most once and is
+consumed at its configured target limit. The player has no projectile collider.
+
+Keyboard C/K and touch FIRE are edge-triggered requests, independent of THROW (bombs). Holding fire
+does not repeat, rejected shots do not spend the cooldown, and focus loss clears queued requests. The
+game config allows five simultaneous pointers for direction + jump + throw + fire.
+
+The HUD adds `ENERGY · Ns` only while the window is active and rewrites text only when the whole-second
+value changes. Future weapon tiers, multi-shot, alternate trajectories and persistence are not
+implemented; see [EXTENDING_MATIO.md](EXTENDING_MATIO.md) section 8.
+
 ## Task 007-A player transformations
 
 `player-forms.json` schema 1 configures growth duration, visual scale and per-axis
@@ -126,7 +160,8 @@ src/entities/             Player, Collectible, Enemy and procedural placeholder 
 src/systems/              Pure rules + Phaser-aware orchestration:
                           validators, scoring, progression, save, jump rules, geometry,
                           combat rules, player health, patrol behavior, enemy ledger,
-                          LevelRepository, LevelLoader, CollectionSystem, EnemySystem, BombSystem, EffectSystem
+                          LevelRepository, LevelLoader, CollectionSystem, EnemySystem, BombSystem,
+                          EffectSystem, EnergyBallSystem
 src/factories/            Phaser construction: terrain, backdrop, goal marker,
                           collectibles and enemies
 src/input/                Unified keyboard/touch input and pure input resolution
@@ -145,7 +180,7 @@ Import direction:
 
 ```text
 core -> scenes -> entities + input + ui + systems + factories + types
-systems/LevelLoader + CollectionSystem + EnemySystem + BombSystem + EffectSystem
+systems/LevelLoader + CollectionSystem + EnemySystem + BombSystem + EffectSystem + EnergyBallSystem
         -> factories + entities + systems + types
                                                       (Phaser-aware orchestration)
 systems (pure) -> types
@@ -155,8 +190,9 @@ types -> (nothing, no Phaser)
 ```
 
 `types/` never imports Phaser. `LevelRepository`, `level-geometry`, validators, scoring, progression,
-save rules, jump rules, combat rules, player health, patrol behavior and the enemy ledger stay
-engine-free, as do `ActiveEffects` and the effect rules. Phaser-aware systems wire those rules to the game.
+save rules, jump rules, combat rules, player health, patrol behavior, projectile rules and the enemy
+ledger stay engine-free, as do `ActiveEffects` and the effect rules. Phaser-aware systems wire those
+rules to the game.
 
 ## 3. Scene lifecycle
 
@@ -174,7 +210,8 @@ Phaser boot
          startPlayableLevel(...)
          OR showLevelError(failure) and return
        update():
-          input -> player.tick -> enemySystem.update -> fall/respawn -> debug HUD
+          input -> player.tick -> enemySystem.update -> bombSystem.update ->
+          energyBallSystem.update -> fall/respawn -> effects/HUD -> throw/fire -> debug HUD
         player/enemy collider:
           playing -> stomp (enemy damage/bounce/score)
                    OR damage (health/knockback/invulnerability)
@@ -254,7 +291,8 @@ core/level-repository  ──►  systems/LevelRepository
 
 ### CollectibleFactory (`src/factories/CollectibleFactory.ts`)
 
-- One `Collectible` sprite per validated coin, star, shield, magnet or growth mushroom placement.
+- One `Collectible` sprite per validated coin, star, shield, magnet, growth mushroom or energy
+  flower placement.
 - One Arcade group for a single player/collectibles overlap.
 - Bodies have gravity disabled and are immovable: pickup only, never a blocking obstacle.
 - Procedural textures live in `entities/collectible-textures.ts` and can be replaced by an atlas.
@@ -291,7 +329,7 @@ core/level-repository  ──►  systems/LevelRepository
 | Logical size | 1280×720 |
 | Renderer | `Phaser.AUTO` (WebGL, Canvas fallback) |
 | Scale | FIT, centered, autoRound |
-| Input | keyboard, mouse, touch, 4 pointers |
+| Input | keyboard, mouse, touch, 5 pointers |
 | Physics | Arcade, fixed 60 Hz, gravity from player.json |
 | Background | #101a2b letterbox; scene sky |
 
@@ -337,10 +375,12 @@ interface PlayerInputState {
 }
 ```
 
-- Keyboard: Left/Right/A/D, Up/W/Space, R (dev). Arrow/Space captures prevent page scrolling.
-- Touch: semi-transparent buttons fixed to the camera; shown on touch devices or when forced with
-  `?touch=1` (dev) / `VITE_FORCE_TOUCH_CONTROLS=true`.
+- Keyboard: Left/Right/A/D, Up/W/Space, X/J (bomb), C/K (fire), R (dev). Arrow/Space captures
+  prevent page scrolling.
+- Touch: semi-transparent LEFT/RIGHT/JUMP/THROW/FIRE buttons fixed to the camera; shown on touch
+  devices or when forced with `?touch=1` (dev) / `VITE_FORCE_TOUCH_CONTROLS=true`.
 - Edge detection: pure `computePlayerInputState`; queued touch taps and released→held transitions.
+  Bomb throws and Energy Ball shots are independent one-per-press queued requests.
 - Multitouch ownership is a `Map<pointerId, control>`; global pointer-up/up-outside/move-off/game-out
   plus pause/sleep/blur release ownership. No stuck input.
 - Cleanup removes keys, captures, scene listeners and DOM listeners on shutdown. Repeated restarts
@@ -368,13 +408,16 @@ model (`systems/player-health.ts`); the Player never decides how much damage it 
   reload/rebuild. Adding `level-04.json` needs no TypeScript changes.
 - Enemy placements reference an archetype by ID; LevelLoader rejects unknown IDs or unsafe cells.
 - `content/config/effects.json` defines durations, shield charges, magnet radius, speed and collection distance.
+- `content/config/weapons.json` defines implemented weapon tuning and the temporary ability duration.
+- `content/config/player-forms.json` defines growth duration, visual scale and body multipliers.
 - Invalid content never silently falls back to a different level.
 
 ## 11. UI, debug and errors
 
 - `LevelHeader` shows level name/ID/size and controls, fixed to the camera.
-- `GameHud` (production + dev) shows level name, coin/star counters, collected points and player
-  health hearts. It is camera-fixed (`scrollFactor(0)`) and only rewrites text when a value changes.
+- `GameHud` (production + dev) shows level name, coin/star counters, collected points, player
+  health hearts, bomb inventory, shield/magnet/growth state and the Energy Ball indicator. It is
+  camera-fixed (`scrollFactor(0)`) and only rewrites text when a value changes.
 - `ResultScene` is a separate scene fed with plain data: counts, enemy defeats/points, score, rating,
   best records and next level. RETRY/NEXT LEVEL/MAIN MENU use `TextButton` (shared mouse/touch path)
   and a local transition guard.
@@ -392,9 +435,9 @@ model (`systems/player-health.ts`); the Player never decides how much damage it 
 
 - Phaser destroys display-list objects, physics bodies and colliders on scene shutdown; the scene does
   not manually destroy gameplay display objects.
-- `GameScene.handleShutdown` destroys `EnemySystem` (its two colliders), `CollectionSystem`, the goal
-  overlap, `InputManager`, guards camera teardown order (`this.cameras?.main?.stopFollow()`) and
-  clears its own references.
+- `GameScene.handleShutdown` destroys `EnemySystem` (its two colliders), `BombSystem`,
+  `EnergyBallSystem`, `CollectionSystem`, the goal overlap, `InputManager`, guards camera teardown
+  order (`this.cameras?.main?.stopFollow()`) and clears its own references.
 - The loader is synchronous, so a late async result cannot mutate a dead scene.
 - Retry (result or Game Over) starts a new GameScene, which creates fresh enemies, collectibles,
   ledgers and health. No run state is carried through the Phaser scene registry.
@@ -403,16 +446,18 @@ model (`systems/player-health.ts`); the Player never decides how much damage it 
 
 ## 13. Testing
 
-- 24 Vitest files, 233 tests: level validation, player config, input resolution, jump controller,
+- 29 Vitest files, 339 tests: level validation, player config, input resolution, jump controller,
   level geometry/camera frame, collectible geometry/content, collection ledger, scoring/rating,
   scoring config, level order/progression, level launch policy, save validation/progress/store,
   gameplay state, level repository/selector, enemy config, enemy placement safety, patrol behavior,
-  stomp classification, player health/invulnerability, enemy ledger and combat config.
+  stomp classification, player health/invulnerability, enemy ledger, combat config, effects,
+  player forms, weapon configuration, Energy Ball ability timing, projectile rules and content
+  placement.
 - Repository/content tests read all shipped levels and assert validity, unique IDs, no collectible
   inside solid terrain, valid enemy archetypes, ordered patrols and solid ground below enemies.
 - Phaser construction, camera/input, collection overlap, victory, enemy stomps, player damage,
-  invulnerability, Game Over and save persistence are verified in a real browser; Phaser is not
-  mocked.
+  invulnerability, Game Over, saves, bombs, effects, growth and Energy Ball are verified in a real
+  browser; Phaser is not mocked. Scripted fixtures live under `tests/*-browser.html`.
 - Background/occluded Chromium tabs throttle `requestAnimationFrame`, so deterministic browser checks
   stop `game.loop` and call `game.step(time, 16.666)` manually. This is test instrumentation only.
 
@@ -555,6 +600,12 @@ Spiky health is reserved for future combat methods and is not reduced by stompin
 | Zero-enemy breakdown omits `enemyPoints` | Preserves exact pre-Task-005 score/format for old levels |
 | Explicit `GameOverScene` with no next level | Terminal failure cannot accidentally unlock or save progression |
 | Per-enemy procedural texture key | Final sprites can replace placeholders without touching the entity |
+| Energy Ball tuning in `weapons.json`, behavior in TypeScript | Balance is content; new mechanics still need reviewed code |
+| Separate BombSystem and EnergyBallSystem | Different lifecycles (inventory/fuse/radius vs ability/direct-hit/bounce) |
+| Ability clock in `ActiveEffects` | One attempt clock, consistent pause/respawn/terminal semantics |
+| Add to Arcade group before body tuning | Group insertion can reset velocity, gravity and bounce |
+| Resolve collider arguments defensively | Phaser callback order is not guaranteed for group/array pairs |
+| Projectiles freeze and disappear on Victory/Game Over | No damage after terminal settlement |
 
 ## 20. Known risks
 
@@ -576,3 +627,53 @@ Spiky health is reserved for future combat methods and is not reduced by stompin
     verified, not play-tested on mid-range Android hardware.
 14. Enemies do not respawn after falling below the world; shipped patrol bounds prevent this, but
     future content must keep enemies on solid ground.
+15. Energy Ball bounce/ceiling behavior is deterministic for the shipped 64 px terrain; sub-frame
+    tunneling through future thin geometry is not specially handled.
+16. Weapon balance (speed, bounce, cooldown, limits, duration) is provisional and scripted-verified,
+    not played on a physical device.
+
+## 21. Audio planning (PLANNED — NOT IMPLEMENTED)
+
+No audio engine, audio asset, audio dependency or audio settings UI exists in this build. This section
+is a future integration contract only. Gameplay code must not call Phaser sound APIs, and no generic
+event bus was added for hypothetical audio.
+
+### Future AudioManager responsibilities
+
+- Map semantic sound IDs to licensed/original assets.
+- Preload audio without blocking gameplay.
+- Handle browser/WebView audio-unlock requirements on the first user gesture.
+- Prevent overlapping duplicate music and cap simultaneous SFX.
+- Keep music and SFX volume separate; support mute and future preferences.
+- Follow scene transitions, pause/sleep/blur and app lifecycle.
+- Degrade gracefully when no audio device or asset is available.
+- Work in Android WebView with relative asset paths.
+
+Game rules remain independent of playback. When audio is implemented, gameplay integration
+boundaries (player, collection, combat, weapons, blocks, pipes, level flow) may emit these semantic
+IDs to a centralized manager:
+
+```text
+player.jump              player.land              player.grow
+player.shrink            player.damage
+
+coin.collect             star.collect
+
+enemy.stomp              enemy.hit                enemy.defeat
+
+weapon.bomb.throw        weapon.bomb.explode
+weapon.energy.fire       weapon.energy.hit
+
+powerup.shield.collect   powerup.shield.absorb
+powerup.magnet.collect   powerup.growth.collect
+
+block.bump               block.break              block.reward
+
+pipe.enter               pipe.exit
+
+level.complete           player.gameover
+```
+
+These names are planned contracts, not emitted runtime events. Suggested sequencing: finish Energy
+Ball, finish interactive blocks, finish pipes/secret areas, implement the first centralized sound
+system, then add original SFX and music progressively. No copyrighted samples or music.

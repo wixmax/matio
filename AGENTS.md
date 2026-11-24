@@ -1,5 +1,17 @@
 # AGENTS.md — Instructions for AI Coding Agents
 
+Task 007-B weapon rules: validate `content/config/weapons.json` before boot. Only the implemented
+`energy-ball` id is accepted. Energy flowers are normal collectible pickups routed through
+`CollectionSystem`, grant a temporary `ActiveEffects` ability window, award no score and are never
+saved. `EnergyBallSystem` owns the Arcade projectiles, cooldown, active/target limits and cleanup.
+Add sprites to the physics group before applying body velocity/gravity/bounce. Resolve collider
+arguments in either order. Direct hits go through `EnemySystem.damageEnemy()` and `EnemyLedger`.
+Freeze and remove projectiles on Victory, Game Over and shutdown.
+
+Start here: [PROJECT_STATUS](docs/PROJECT_STATUS.md), [ARCHITECTURE](docs/ARCHITECTURE.md),
+[GAMEPLAY_MECHANICS](docs/GAMEPLAY_MECHANICS.md), [EXTENDING_MATIO](docs/EXTENDING_MATIO.md),
+[ARCHITECTURE_DECISIONS](docs/ARCHITECTURE_DECISIONS.md).
+
 Task 007-A form rules: validate `content/config/player-forms.json` before boot.
 Growth mushrooms use the existing overlap pipeline. Keep one growth clock in
 `ActiveEffects` and queue physical changes until Arcade has resolved collisions.
@@ -32,10 +44,11 @@ technical architect reviews each task. Read this file before doing anything.
   **Vitest 5.1.1**, npm, JSON content, Phaser Arcade Physics.
 - Logical resolution 1280×720, landscape-first, FIT scaling, WebGL with Canvas fallback.
 - No React/Vue/Angular/Next.js, no backend, no authentication, no database, no cloud services.
-- Current milestone: **Task 007-A** — JSON-driven levels, terrain/collision generation,
-  goal marker, camera follow, collectibles, scoring/rating, progression, local save, plus JSON
-  enemy archetypes, patrol behavior, stomp/damage combat, player health/invulnerability and a
-  Game Over/retry flow, bomb throws and explosion combat, shield, coin magnet and player growth.
+- Current milestone: **Task 007-B** — JSON-driven levels, terrain/collision generation,
+  goal marker, camera follow, collectibles, scoring/rating, progression, local save, JSON
+  enemy archetypes, patrol behavior, stomp/damage combat, player health/invulnerability, a
+  Game Over/retry flow, bomb throws and explosion combat, shield, coin magnet, player growth,
+  and the temporary Energy Ball weapon with its validated weapon configuration.
 
 ## Mandatory rules
 
@@ -92,10 +105,11 @@ npm run preview    # serve the production bundle
 npm run typecheck  # tsc --noEmit (strict)
 npm run test       # Vitest, single run
 npm run test:watch # Vitest watch mode
+npm run verify     # typecheck + tests + production build
 ```
 
-Run `typecheck`, `test` and `build` before every handoff, plus a browser check for visual/input
-changes. The dev server uses a fixed port so review steps stay stable.
+Run `npm run verify` before every handoff, plus a browser check for visual/input/physics changes.
+`verify` does not replace browser verification.
 
 ## Where code goes
 
@@ -120,7 +134,8 @@ changes. The dev server uses a fixed port so review steps stay stable.
 Import direction must stay acyclic:
 `core -> scenes -> entities + input + ui + systems + factories + types`.
 Pure systems and `types/` must never import scenes or UI. `types/` must stay Phaser-free.
-`LevelLoader`, CollectionSystem, EnemySystem, BombSystem and EffectSystem are Phaser-aware.
+`LevelLoader`, CollectionSystem, EnemySystem, BombSystem, EffectSystem and EnergyBallSystem are
+Phaser-aware.
 
 ## Technical conventions
 
@@ -141,6 +156,14 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
 - Combat tuning (health, invulnerability, knockback, stomp bounce/tolerance) lives only in
   `content/config/combat.json`. Combat classification belongs in `src/systems/combat-rules.ts`,
   health rules in `src/systems/player-health.ts`, and patrol in `src/systems/enemy-behaviors.ts`.
+- Weapon tuning (damage, speed, launch/gravity/bounce, cooldown, lifetime, active/target limits,
+  ability duration) lives only in `content/config/weapons.json`. Weapon behavior belongs in
+  `src/systems/projectile-rules.ts` (pure) and `src/systems/EnergyBallSystem.ts` +
+  `src/entities/EnergyBall.ts` (Phaser-aware). Never hardcode those values in scenes or entities.
+- Add a projectile to its Arcade group before applying velocity/gravity/bounce; group insertion can
+  reset body defaults. Resolve collider callback arguments in either order (Phaser does not guarantee
+  them). Direct-hit damage must use `EnemySystem.damageEnemy()`; never create a second health or
+  score ledger. Freeze damage and remove projectiles on Victory, Game Over and shutdown.
 - Never classify stomps from velocity alone: Arcade separation can zero velocity before the
   callback. Use previous-step body geometry plus current enemy geometry.
 - The player/enemy contact handler is exclusive: one contact resolves as either a stomp or player
@@ -185,8 +208,9 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
 - Container hit areas use **top-left box coordinates** (0,0 → width,height), not centered
   coordinates. See `TextButton` and `TouchControlButton`.
 - Touch controls are shown on touch devices only; force them with `?touch=1` (dev) or
-  `VITE_FORCE_TOUCH_CONTROLS=true`. Release every pointer on up/up-outside/game-out/blur/pause and
-  remove all listeners, keys and captures on shutdown.
+  `VITE_FORCE_TOUCH_CONTROLS=true`. THROW and FIRE are independent buttons with a five-pointer
+  budget. Release every pointer on up/up-outside/game-out/blur/pause and remove all listeners, keys
+  and captures on shutdown.
 - Clean up listeners/timers added to global managers when a scene shuts down. Verify scene restart
   does not duplicate input listeners.
 - Colors and fonts come from `src/ui/theme.ts`; no ad-hoc palette per scene.
@@ -210,6 +234,10 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
   `validateScoringConfig()` before gameplay starts.
 - `content/config/enemies.json` and `content/config/combat.json` are versioned (`schemaVersion: 1`)
   and validated at startup. Invalid values block the game; never guess defaults.
+- `content/config/weapons.json` is versioned (`schemaVersion: 1`), validated by
+  `validateWeaponConfig()` before boot, and rejects unknown weapon IDs. Only `energy-ball` exists.
+- `energy-flower` uses the collectible tile-center convention, grants a temporary ability, awards no
+  score and has no rating or save impact. It must not be authored inside solid terrain.
 - Enemy placements are validated structurally and cross-checked against the archetype registry and
   terrain safety. Unknown `enemyId`, invalid patrols or unsafe cells must fail visibly.
 - Enemy defeat score is added to the existing run score exactly once per defeat. Zero-enemy levels
@@ -241,6 +269,9 @@ Pure systems and `types/` must never import scenes or UI. `types/` must stay Pha
   collection, enemy score once, and victory score including enemy points.
 - Test the production build with `npm run preview` for menu/result/HUD behavior; remember the dev
   bridge and dev level selector are absent there.
+- Weapon changes also need `/tests/energy-ball-browser.html?touch=1`: activation/refresh, HUD, C/K
+  edge input, cooldown/limits, bounce/wall/ceiling, lifetime, enemy damage/score, fall, Retry,
+  Victory/Game Over, touch FIRE and restart stability.
 - Force touch controls with `?touch=1` when the test machine has no touchscreen. Synthetic touch
   events verify the Phaser input path, not a real device; say which was used.
 - If a background browser tab throttles `requestAnimationFrame`, stop `game.loop` and call

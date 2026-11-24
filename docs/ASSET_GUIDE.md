@@ -196,3 +196,15 @@ Until a task explicitly introduces final art:
 - Do not commit generated art "just to test" without following this guide; it normalizes
   low-quality assets into the repository.
 - Placeholder colors come from `src/ui/theme.ts`, not ad-hoc hex values in scenes.
+
+## 10. Pickup and projectile placeholder replacement
+
+- Collectible and power-up art is generated in `src/entities/collectible-textures.ts` under the keys
+  `matio-collectible-<type>` (including `matio-collectible-energy-flower`). Frames are 40×40 with a
+  30×32 overlap body. Keep the key and body metrics stable when swapping in an atlas, or update
+  `COLLECTIBLE_FRAME` and the entity together.
+- The Energy Ball projectile is generated in `src/entities/energy-ball-textures.ts` under
+  `matio-energy-ball`, frame 30×30, Arcade body 20×20. `ensureEnergyBallTexture()` skips generation
+  when the key already exists, so a preloaded atlas can replace it without touching gameplay code.
+- Keep the projectile body smaller than the visual frame so contact feels fair, and never bake a
+  trail or background into the texture; trails/impacts stay procedural effects.

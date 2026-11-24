@@ -11,6 +11,7 @@ import { getLevelRepository } from './core/level-repository';
 import { formatPlayerConfigErrors, getPlayerConfigResult } from './core/player-config';
 import { getPlayerFormsConfigResult } from './core/player-forms-config';
 import { getScoringConfigResult } from './core/scoring-config';
+import { getWeaponConfigResult } from './core/weapon-config';
 import { exposeGameForDebug, removeGameDebugBridge } from './core/dev-bridge';
 import { validateLevelOrderReferences } from './systems/progression';
 
@@ -23,6 +24,7 @@ const enemiesConfigResult = getEnemiesConfigResult();
 const combatConfigResult = getCombatConfigResult();
 const bombConfigResult = getBombConfigResult();
 const effectsConfigResult = getEffectsConfigResult();
+const weaponConfigResult = getWeaponConfigResult();
 const levelOrderResult = getLevelOrderResult();
 const problems: string[] = [];
 
@@ -57,6 +59,11 @@ if (!bombConfigResult.ok) {
 if (!effectsConfigResult.ok) {
   const details = effectsConfigResult.errors.map(({ path, message }) => `${path}: ${message}`).join('\n');
   problems.push(`content/config/effects.json\n${details}`);
+}
+
+if (!weaponConfigResult.ok) {
+  const details = weaponConfigResult.errors.map(({ path, message }) => `${path}: ${message}`).join('\n');
+  problems.push(`content/config/weapons.json\n${details}`);
 }
 
 if (!levelOrderResult.ok) {
@@ -94,6 +101,7 @@ if (problems.length > 0) {
   combatConfigResult.ok &&
   bombConfigResult.ok &&
   effectsConfigResult.ok &&
+  weaponConfigResult.ok &&
   levelOrderResult.ok
 ) {
   const game = new Phaser.Game(createGameConfig(playerConfigResult.value));

@@ -1,5 +1,13 @@
 # Game Design — Adventure Platformer
 
+Task 007-B adds the Energy Ball. An energy flower grants a 20-second ability; C/K or
+the touch FIRE control launches bouncing Energy Balls in the facing direction. A
+direct hit damages an enemy immediately through the existing health/score path, with
+no fuse and no radial explosion. Bombs remain independent consumables on X/J or THROW.
+Holding fire does not repeat; cooldown, active-projectile and target limits apply. The
+ability survives a fall, is refreshed by another flower and is cleared by Retry,
+Victory and Game Over.
+
 Task 007-A adds the growth mushroom. The player starts small and becomes big for
 20 seconds once the larger body fits. Under an overhang, the pickup stays collected
 and the HUD shows `PENDING GROWTH`. The timer starts when the player steps clear.
@@ -94,6 +102,8 @@ themes, backgrounds and parallax.
 Coins and collectible stars are implemented: JSON placement, idempotent overlap, HUD counters,
 score feedback, persistent best-collection records. Bomb pickups and throws operate within the
 current run. Shield, coin magnet and growth mushroom pickups apply temporary effects during play.
+Energy flowers grant the temporary Energy Ball ability. All pickups are run-scoped; none is a
+permanent inventory item.
 
 ### Scoring and progression
 Score breakdown (coins, collectible stars, enemy defeats, completion), 1–3 star rating, explicit
@@ -104,8 +114,21 @@ achievements and cloud save remain planned.
 ### Enemies and combat
 Implemented in Task 005: JSON archetypes (mushroom, snail, spiky), deterministic patrol behavior,
 stomp classification, multi-hit enemies, non-stompable hazards, player health, invulnerability,
-knockback, defeat scoring and a Game Over/retry flow. Still planned: chase/flyer/turret behaviors,
-enemy projectiles, bosses and respawning enemies.
+knockback, defeat scoring and a Game Over/retry flow. Task 006-A added bomb explosions and Task
+007-B added immediate Energy Ball hits. All external damage shares the enemy health and defeat
+scoring path. Still planned: chase/flyer/turret behaviors, enemy projectiles, bosses and respawning
+enemies.
+
+### Interactive blocks and pipes (planned, not implemented)
+Future milestones intend big-player-only brick breaking, small-player bumping, reward blocks that
+release items once, pipes and secret/underground rooms. The current `block` terrain is a plain solid
+step; no interactive tile type, hit-from-below rule or item release exists yet.
+
+### Audio (planned, not implemented)
+No audio engine or assets exist. The future contract, centralized `AudioManager` responsibilities
+and semantic sound IDs are documented in
+[ARCHITECTURE.md](ARCHITECTURE.md#21-audio-planning-planned--not-implemented). All final audio must be
+original or properly licensed.
 
 ### Meta systems (later)
 Shop, inventory, achievements, daily quests, daily rewards, lucky spin. These must remain optional
@@ -154,6 +177,7 @@ health/enemies/collectibles, falling keeps collections and health, and tests/typ
 - **Task 006-A** — bomb pickups, throws and explosion combat.
 - **Task 006-B** — temporary shield and coin magnet pickups, effects, and HUD.
 - **Task 007-A** — temporary small/big transformations with feet-anchored Arcade bodies.
+- **Task 007-B** — Energy Ball ability, energy-flower pickups, weapon config seam and maintainability docs.
 
 ## 8. Product success criteria for the first playable
 

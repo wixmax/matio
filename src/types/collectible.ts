@@ -1,5 +1,6 @@
 import type { EffectType } from './effects';
 import type { LevelObjectType } from './level';
+import { isWeaponPickupType, type WeaponPickupType } from './weapon';
 
 /**
  * Collectible contracts (Phaser-free).
@@ -15,7 +16,7 @@ export const COLLECTIBLE_TYPES = ['coin', 'star'] as const;
 export type CollectibleType = (typeof COLLECTIBLE_TYPES)[number];
 
 export type EffectPickupType = Exclude<EffectType, 'growth'> | 'growth-mushroom';
-export type CollectiblePickupType = CollectibleType | EffectPickupType;
+export type CollectiblePickupType = CollectibleType | EffectPickupType | WeaponPickupType;
 
 /**
  * A validated collectible converted to world pixels.
@@ -43,7 +44,8 @@ export interface CollectibleTotals {
 }
 
 export function isCollectiblePickupType(type: LevelObjectType): type is CollectiblePickupType {
-  return isCollectibleType(type) || type === 'shield' || type === 'magnet' || type === 'growth-mushroom';
+  return isCollectibleType(type) || type === 'shield' || type === 'magnet' ||
+    type === 'growth-mushroom' || isWeaponPickupType(type);
 }
 
 export function isCollectibleType(type: LevelObjectType): type is CollectibleType {
