@@ -104,6 +104,33 @@ NOT IMPLEMENTED. Planned text is intent only; it must not be described as workin
 - Player health is never affected by a projectile.
 - The ability does not stack damage; only Energy Ball Level 1 exists.
 
+### Interactive blocks and head bumps
+
+- JSON object `interactive-block` with archetype `breakable-brick` or `reward-block`, one tile per
+  object, a required unique ID and a tile-aligned cell.
+- Blocks are genuine one-tile static Arcade bodies. Their visual bump moves only the image.
+- A valid head hit needs upward movement, horizontal overlap, Arcade upward contact and the
+  previous body top below the block underside. Side collisions, landing on top, downward contact,
+  growth/teleport overlaps and a held jump's repeated frames do not activate the block again.
+- Small form bumps an ordinary brick but cannot break it. Big form breaks it once; the static body
+  is disabled immediately, the block fades with procedural debris, and the player can pass through
+  the former cell. An expired Big form is small and cannot break.
+- Weapon explosions, Energy Balls and bombs never break or activate interactive blocks in this
+  milestone.
+- Reward blocks are solid in every state. `unused → activating → used`; a valid head hit from either
+  form releases one configured reward exactly once. The used block stays solid and further hits
+  only bump it.
+- Reward types: coin, bomb, shield, magnet, growth-mushroom, energy-flower. They use the existing
+  CollectionSystem/BombSystem/EffectSystem paths; no second inventory, effect clock or score ledger.
+- A reward rises into the cell above the block, then settles into the first open cell above solid
+  ground in the same column. It becomes collectible only after that deterministic path. The level
+  validator rejects missing emergence/headroom or settle space.
+- A reward coin adds 100 points and one run coin (HUD/current run). Authored coin/star totals and
+  the rating denominator do not change; the rating numerator can include reward coins and is clamped.
+- Falling preserves destroyed bricks, used reward blocks, released/collected rewards and score.
+  Retry/scene restart restores the authored block content. Victory and Game Over freeze block
+  interaction; shutdown removes colliders, tweens and debris.
+
 ### Victory, Game Over, fall respawn and Retry
 
 - Victory: goal overlap flips `playing → completing → results` once, freezes collection/enemies/
@@ -116,23 +143,26 @@ NOT IMPLEMENTED. Planned text is intent only; it must not be described as workin
 
 ## PLANNED
 
-These are design intentions only. None is implemented in Task 007-B.
+These are design intentions only. None is implemented in Task 008-A.
 
-- Big player breaks ordinary bricks when hitting them from below.
-- Small player bumps appropriate bricks but cannot break them.
-- Reward blocks release items and cannot pay out twice.
-- Pipes transition to secret or underground areas.
+- Multi-coin reward blocks and hidden/invisible blocks.
+- Block bumps damaging or launching enemies standing above them.
+- Energy Ball, bomb or other weapon events breaking/activating interactive blocks.
+- Pipes transitioning to secret or underground areas.
+- Moving platforms and one-way platforms.
 - Enemy archetypes acquire special interaction behaviors (shells, kicks, unique reactions).
 - Character and weapon upgrades; permanent progression and inventory.
 
 ### Intent vs implementation notes
 
-- The design language "bricks", "reward blocks" and "pipes" currently has **no** terrain or object
-  type in schema 1. `block` is currently a plain solid step, not an interactive brick.
+- `interactive-block` is the implemented schema-1 object type. The terrain type `block` is still a
+  plain solid step and is not an interactive brick.
+- Reward blocks release exactly one item. Multi-coin/hidden blocks need code plus content rules.
 - Weapons currently have no upgrade tiers, ammo, shop or saved state. A second weapon pickup or an
   upgrade requires TypeScript work plus a validated config entry.
 - Enemy defeat by Energy Ball is implemented for existing archetypes, but there is no
-  weapon-specific enemy interaction beyond immediate damage.
+  weapon-specific enemy interaction beyond immediate damage. Block bumps and weapons are separate
+  systems today.
 
 ### Audio planning (PLANNED — NOT IMPLEMENTED)
 
@@ -147,7 +177,7 @@ original or properly licensed; no copyrighted samples.
 
 - Hammer/melee combat.
 - Weapon Level 2/3, permanent weapon inventory, shop or saved weapon progression.
-- Breakable bricks, golden/hidden/multi-coin reward blocks, hit-from-below interactions.
+- Golden/hidden/multi-coin reward blocks; breakable blocks other than the two implemented archetypes.
 - Pipes, underground rooms, moving platforms.
 - Enemy shells, shell kicking, new enemy types, chasing/flying enemies, enemy projectiles, bosses.
 - Character selection, final art, music, sound effects, audio settings.

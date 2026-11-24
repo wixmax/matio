@@ -9,7 +9,12 @@ import { createLevelBackdrop } from '../factories/BackdropFactory';
 import { createCollectibles, type CollectibleRuntime } from '../factories/CollectibleFactory';
 import { createEnemies, type EnemyRuntime } from '../factories/EnemyFactory';
 import { createGoalMarker, type GoalRuntime } from '../factories/GoalMarkerFactory';
+import {
+  createInteractiveBlocks,
+  type InteractiveBlockRuntime,
+} from '../factories/InteractiveBlockFactory';
 import { createTerrain } from '../factories/TerrainFactory';
+import { validateInteractiveBlockPlacements } from './block-rules';
 import { validateEnemyPlacements } from './enemy-config-validator';
 import {
   createLevelGeometry,
@@ -27,6 +32,8 @@ export interface LevelRuntime {
   readonly collectibles: CollectibleRuntime;
   /** Enemy instances and the dynamic group used for collision/overlap. */
   readonly enemies: EnemyRuntime;
+  /** Interactive blocks; solid bodies are wired by GameScene's block system. */
+  readonly interactiveBlocks: InteractiveBlockRuntime;
 }
 
 export interface LevelLoadOptions {
@@ -84,6 +91,20 @@ export function loadLevel(
     };
   }
 
+  const blockIssues = validateInteractiveBlockPlacements(level);
+
+  if (blockIssues.length > 0) {
+    return {
+      ok: false,
+      error: {
+        code: 'invalid-level',
+        levelId: level.id,
+        message: `Level "${level.id}" contains invalid interactive-block placement data.`,
+        details: blockIssues,
+      },
+    };
+  }
+
   const blockedPickupIndex = level.objects.findIndex((object) =>
     (object.type === 'bomb' || object.type === 'shield' || object.type === 'magnet' ||
       object.type === 'growth-mushroom' || object.type === 'energy-flower') &&
@@ -110,6 +131,7 @@ export function loadLevel(
   const terrain = createTerrain(scene, geometry);
   const goal = createGoalMarker(scene, geometry.goal);
   const collectibles = createCollectibles(scene, geometry.collectibles);
+  const interactiveBlocks = createInteractiveBlocks(scene, geometry.interactiveBlocks);
   const enemies = createEnemies(
     scene,
     geometry.enemies,
@@ -118,7 +140,7 @@ export function loadLevel(
   );
   if (import.meta.env.DEV) {
     console.info(
-      `[LevelLoader] Level "${level.id}" collectibles: ${geometry.collectibleTotals.coins} coin(s), ${geometry.collectibleTotals.stars} collectible star(s); enemies: ${enemies.totalCount}.`,
+      `[LevelLoader] Level "${level.id}" collectibles: ${geometry.collectibleTotals.coins} coin(s), ${geometry.collectibleTotals.stars} collectible star(s); enemies: ${enemies.totalCount}; interactive blocks: ${interactiveBlocks.blocks.length}.`,
     );
   }
 
@@ -131,6 +153,7 @@ export function loadLevel(
       backdrop,
       collectibles,
       enemies,
+      interactiveBlocks,
     },
   };
 }

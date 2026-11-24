@@ -30,7 +30,7 @@ export class BombSystem {
   private frozen = false;
 
   constructor(scene: Phaser.Scene, level: LevelDefinition, player: Player, enemies: Pick<EnemySystem, 'damageEnemiesInRadius'>,
-    solids: readonly Phaser.GameObjects.Rectangle[], config: BombConfig, onChanged: () => void) {
+    solids: readonly Phaser.GameObjects.GameObject[], config: BombConfig, onChanged: () => void) {
     this.scene = scene;
     this.player = player;
     this.enemies = enemies;
@@ -44,10 +44,7 @@ export class BombSystem {
     for (const object of level.objects) {
       if (object.type !== 'bomb') continue;
       const point = cellCenter(object, level.tileSize);
-      const pickup = scene.physics.add.sprite(point.x, point.y, TEXTURE);
-      pickup.setTint(PALETTE.sun);
-      pickup.body?.setSize(28, 28, true);
-      this.pickups.add(pickup);
+      this.createPickup(point.x, point.y);
     }
     this.pickupCollider = scene.physics.add.overlap(player, this.pickups, (_player, item) => {
       if (this.frozen || !(item instanceof Phaser.Physics.Arcade.Sprite) || !item.active) return;
@@ -56,6 +53,30 @@ export class BombSystem {
       this.onChanged();
     });
     this.terrainCollider = scene.physics.add.collider(this.projectiles, [...solids]);
+  }
+
+  /**
+   * Creates one bomb pickup in the existing pickup group. Used by a reward
+   * block so bomb rewards share the normal inventory overlap and cap rules.
+   * The caller owns the emergence animation and may disable the body first.
+   */
+  spawnRewardPickup(x: number, y: number): Phaser.Physics.Arcade.Sprite | null {
+    if (this.frozen) return null;
+    return this.createPickup(x, y);
+  }
+
+  private createPickup(x: number, y: number): Phaser.Physics.Arcade.Sprite {
+    const pickup = this.scene.physics.add.sprite(x, y, TEXTURE);
+    pickup.setTint(PALETTE.sun);
+    this.pickups.add(pickup);
+
+    if (pickup.body instanceof Phaser.Physics.Arcade.Body) {
+      pickup.body.setAllowGravity(false);
+      pickup.body.setImmovable(true);
+      pickup.body.setSize(28, 28, true);
+    }
+
+    return pickup;
   }
 
   throw(): boolean {

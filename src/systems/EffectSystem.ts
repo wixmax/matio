@@ -18,7 +18,8 @@ interface EffectSystemOptions {
   readonly scene: Phaser.Scene;
   readonly player: Player;
   readonly coins: readonly Collectible[];
-  readonly solids: readonly PixelRect[];
+  /** Live solid query: broken interactive blocks disappear from this result. */
+  readonly getSolids: () => readonly PixelRect[];
   readonly collection: CollectionSystem;
   readonly config: EffectsConfig;
   readonly forms: PlayerFormsConfig;
@@ -97,7 +98,7 @@ export class EffectSystem {
 
   private canGrowAt(feet: WorldPoint): boolean {
     const body = bodyAtFeet(feet, this.bigMetrics);
-    return hasGrowthRoom(body, this.options.world, this.options.solids) &&
+    return hasGrowthRoom(body, this.options.world, this.options.getSolids()) &&
       !this.options.intersectsEnemy(body);
   }
 
@@ -114,7 +115,8 @@ export class EffectSystem {
   }
 
   private attractCoins(delta: number): void {
-    const { coins, solids, collection, player, config } = this.options;
+    const { coins, collection, player, config } = this.options;
+    const solids = this.options.getSolids();
     const { radius, attractionSpeed, collectionDistance } = config.magnet;
     const { bodyWidth, bodyHeight } = COLLECTIBLE_FRAME.coin;
     const body = player.physicsBody;

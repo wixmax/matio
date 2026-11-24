@@ -24,7 +24,7 @@ export interface EnemySystemOptions {
   readonly scene: Phaser.Scene;
   readonly player: Player;
   readonly runtime: EnemyRuntime;
-  readonly solids: readonly Phaser.GameObjects.Rectangle[];
+  readonly solids: readonly Phaser.GameObjects.GameObject[];
   readonly combat: CombatConfig;
   readonly health: PlayerHealth;
   readonly absorbPlayerDamage: () => boolean;

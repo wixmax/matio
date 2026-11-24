@@ -9,6 +9,7 @@ import { requireCombatConfig } from '../core/combat-config';
 import { requireBombConfig } from '../core/bomb-config';
 import { requireEffectsConfig } from '../core/effects-config';
 import { requireEnemiesConfig } from '../core/enemies-config';
+import { requireInteractiveBlocksConfig } from '../core/interactive-block-config';
 import { requirePlayerConfig } from '../core/player-config';
 import { requirePlayerFormsConfig } from '../core/player-forms-config';
 import { requireWeaponConfig } from '../core/weapon-config';
@@ -22,6 +23,7 @@ import { EnemySystem } from '../systems/EnemySystem';
 import { BombSystem } from '../systems/BombSystem';
 import { EffectSystem } from '../systems/EffectSystem';
 import { EnergyBallSystem } from '../systems/EnergyBallSystem';
+import { InteractiveBlockSystem } from '../systems/InteractiveBlockSystem';
 import {
   canStartCompletion,
   canStartGameOver,
@@ -77,6 +79,7 @@ export class GameScene extends Phaser.Scene {
   private bombSystem: BombSystem | null = null;
   private effectSystem: EffectSystem | null = null;
   private energyBallSystem: EnergyBallSystem | null = null;
+  private interactiveBlockSystem: InteractiveBlockSystem | null = null;
   private health: PlayerHealth | null = null;
 
   private explicitLevelId: string | undefined;
@@ -102,6 +105,7 @@ export class GameScene extends Phaser.Scene {
     this.bombSystem = null;
     this.effectSystem = null;
     this.energyBallSystem = null;
+    this.interactiveBlockSystem = null;
     this.health = null;
   }
 
@@ -184,6 +188,7 @@ export class GameScene extends Phaser.Scene {
 
     const input = this.inputManager.getInputState();
     this.player.tick(delta, input);
+    this.interactiveBlockSystem?.update(delta);
     this.enemySystem?.update(delta);
     this.bombSystem?.update(delta);
     this.energyBallSystem?.update(delta);
@@ -293,17 +298,37 @@ export class GameScene extends Phaser.Scene {
       },
     });
 
+    this.interactiveBlockSystem = new InteractiveBlockSystem({
+      scene: this,
+      player: this.player,
+      runtime: runtime.interactiveBlocks,
+      config: requireInteractiveBlocksConfig(),
+      collectibleGroup: runtime.collectibles.group,
+      coins: runtime.collectibles.coins,
+      getPlayerForm: () => this.effectSystem?.transformation.form ?? 'small',
+      isInteractionActive: () => this.state === 'playing',
+      spawnBombReward: (x, y) => this.bombSystem?.spawnRewardPickup(x, y) ?? null,
+    });
+
     this.effectSystem = new EffectSystem({
       scene: this,
       player: this.player,
       coins: runtime.collectibles.coins,
-      solids: solidTerrainRects(runtime.geometry),
+      getSolids: () => [
+        ...solidTerrainRects(runtime.geometry),
+        ...(this.interactiveBlockSystem?.solidRects ?? []),
+      ],
       collection: this.collectionSystem,
       config: requireEffectsConfig(),
       forms: requirePlayerFormsConfig(),
       world: runtime.geometry,
       intersectsEnemy: (body) => this.enemySystem?.intersectsLivingEnemy(body) ?? false,
     });
+
+    // Intact interactive blocks are real solids for enemies and projectiles.
+    // Broken bricks keep their disabled body in the array, so Arcade ignores
+    // them without rebuilding any collider.
+    const collidableSolids = [...runtime.solids, ...runtime.interactiveBlocks.bodies];
 
     this.physics.add.overlap(
       this.player,
@@ -315,7 +340,7 @@ export class GameScene extends Phaser.Scene {
       scene: this,
       player: this.player,
       runtime: runtime.enemies,
-      solids: runtime.solids,
+      solids: collidableSolids,
       combat,
       health: this.health,
       absorbPlayerDamage: () => this.effectSystem?.absorbContact() ?? false,
@@ -324,7 +349,7 @@ export class GameScene extends Phaser.Scene {
       onPlayerDefeated: () => this.handlePlayerDefeated(),
     });
     this.bombSystem = new BombSystem(this, level, this.player, this.enemySystem,
-      runtime.solids, requireBombConfig(), () => this.updateHud());
+      collidableSolids, requireBombConfig(), () => this.updateHud());
 
     this.energyBallSystem = new EnergyBallSystem({
       scene: this,
@@ -334,7 +359,7 @@ export class GameScene extends Phaser.Scene {
       effects: this.effectSystem.active,
       settings: requireWeaponConfig().weapons['energy-ball'],
       world: runtime.geometry,
-      solids: runtime.solids,
+      solids: collidableSolids,
     });
 
     this.configureCamera(runtime.geometry, this.player);
@@ -444,6 +469,7 @@ export class GameScene extends Phaser.Scene {
     this.bombSystem?.freeze();
     this.energyBallSystem?.freeze();
     this.enemySystem?.freeze();
+    this.interactiveBlockSystem?.freeze();
     this.inputManager?.destroy();
     this.inputManager = null;
     this.player?.stopMotion();
@@ -529,6 +555,7 @@ export class GameScene extends Phaser.Scene {
     this.bombSystem?.freeze();
     this.energyBallSystem?.freeze();
     this.enemySystem?.freeze();
+    this.interactiveBlockSystem?.freeze();
     this.inputManager?.destroy();
     this.inputManager = null;
     this.player?.stopMotion();
@@ -575,10 +602,12 @@ export class GameScene extends Phaser.Scene {
     this.enemySystem?.destroy();
     this.bombSystem?.destroy();
     this.energyBallSystem?.destroy();
+    this.interactiveBlockSystem?.destroy();
     this.collectionSystem?.destroy();
     this.stopEffects();
     this.bombSystem = null;
     this.energyBallSystem = null;
+    this.interactiveBlockSystem = null;
     this.enemySystem = null;
     this.collectionSystem = null;
     this.health = null;

@@ -27,7 +27,7 @@ export interface EnergyBallSystemOptions {
   readonly effects: ActiveEffects;
   readonly settings: WeaponDefinition;
   readonly world: Pick<LevelGeometry, 'worldWidth' | 'worldHeight'>;
-  readonly solids: readonly Phaser.GameObjects.Rectangle[];
+  readonly solids: readonly Phaser.GameObjects.GameObject[];
 }
 
 /**

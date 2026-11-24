@@ -1,5 +1,15 @@
 # Game Design — Adventure Platformer
 
+Task 008-A adds interactive blocks. Two additive JSON archetypes live in all three
+levels: breakable bricks and one-use reward blocks. Any form can bump a brick from
+below; only Big form breaks it, removing the solid body immediately and showing
+procedural debris. Reward blocks release one configured item (coin, bomb, shield,
+magnet, growth mushroom or energy flower) through the existing pickup systems, then
+stay solid in a used state. Rewards emerge above the block and settle onto the ground
+below so they stay reachable. Small bumps, landing, side contact and growth overlaps
+never trigger a payout. Weapons and explosions treat intact blocks as walls and never
+break or activate them in this milestone.
+
 Task 007-B adds the Energy Ball. An energy flower grants a 20-second ability; C/K or
 the touch FIRE control launches bouncing Energy Balls in the facing direction. A
 direct hit damages an enemy immediately through the existing health/score path, with
@@ -119,10 +129,11 @@ knockback, defeat scoring and a Game Over/retry flow. Task 006-A added bomb expl
 scoring path. Still planned: chase/flyer/turret behaviors, enemy projectiles, bosses and respawning
 enemies.
 
-### Interactive blocks and pipes (planned, not implemented)
-Future milestones intend big-player-only brick breaking, small-player bumping, reward blocks that
-release items once, pipes and secret/underground rooms. The current `block` terrain is a plain solid
-step; no interactive tile type, hit-from-below rule or item release exists yet.
+### Interactive blocks and pipes
+Bricks, head bumps and one-use reward blocks are implemented. Future milestones intend multi-coin
+and hidden blocks, enemy reactions to bumps, weapon interactions with destructible terrain, pipes
+and secret/underground rooms. The current terrain type `block` remains a plain solid step; the
+interactive objects are a separate JSON type.
 
 ### Audio (planned, not implemented)
 No audio engine or assets exist. The future contract, centralized `AudioManager` responsibilities
@@ -178,6 +189,7 @@ health/enemies/collectibles, falling keeps collections and health, and tests/typ
 - **Task 006-B** — temporary shield and coin magnet pickups, effects, and HUD.
 - **Task 007-A** — temporary small/big transformations with feet-anchored Arcade bodies.
 - **Task 007-B** — Energy Ball ability, energy-flower pickups, weapon config seam and maintainability docs.
+- **Task 008-A** — breakable bricks, head-bump detection, one-use reward blocks and JSON block config.
 
 ## 8. Product success criteria for the first playable
 

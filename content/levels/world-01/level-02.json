@@ -137,6 +137,26 @@
       "x": 38,
       "y": 15,
       "patrol": { "minX": 37, "maxX": 39 }
+    },
+    { "id": "brick-01", "type": "interactive-block", "blockId": "breakable-brick", "x": 25, "y": 12 },
+    { "id": "brick-02", "type": "interactive-block", "blockId": "breakable-brick", "x": 26, "y": 12 },
+    { "id": "brick-03", "type": "interactive-block", "blockId": "breakable-brick", "x": 39, "y": 12 },
+    { "id": "brick-04", "type": "interactive-block", "blockId": "breakable-brick", "x": 45, "y": 13 },
+    {
+      "id": "reward-01",
+      "type": "interactive-block",
+      "blockId": "reward-block",
+      "x": 30,
+      "y": 12,
+      "reward": { "type": "bomb" }
+    },
+    {
+      "id": "reward-02",
+      "type": "interactive-block",
+      "blockId": "reward-block",
+      "x": 48,
+      "y": 13,
+      "reward": { "type": "shield" }
     }
   ]
 }

@@ -1,5 +1,10 @@
 # Level Format — schema version 1
 
+Interactive blocks use a required-ID object, for example
+`{ "id": "brick-01", "type": "interactive-block", "blockId": "breakable-brick", "x": 12, "y": 10 }`.
+Reward blocks add `"reward": { "type": "coin" }`. Coordinates are the top-left tile, the block is
+one solid tile and the object is not a replacement for existing terrain. See section 5.1.
+
 Energy flowers use the same flat item object, for example
 `{ "id": "energy-flower-01", "type": "energy-flower", "x": 5, "y": 10 }`.
 Coordinates identify the cell center. They grant the temporary Energy Ball ability
@@ -22,9 +27,9 @@ time; adding a valid file is enough to register a playable level.
 - Default level / dev selector: `src/core/level-config.ts`
 
 Status: schema 1 is implemented end-to-end (discovery, validation, terrain, colliders, collectibles,
-enemies, goal completion, camera, respawn, combat, scoring/rating, progression, save and error view).
-All eight schema-1 object types are instantiated. Shield, magnet, growth mushrooms and energy flowers
-use the existing item shape.
+enemies, interactive blocks, goal completion, camera, respawn, combat, scoring/rating, progression,
+save and error view). All nine schema-1 object types are instantiated. Shield, magnet, growth
+mushrooms and energy flowers use the existing item shape.
 
 ## 1. Coordinate system and anchors
 
@@ -89,11 +94,11 @@ loading without changing the JSON contract.
 
 Shipped levels:
 
-| ID | File | Name | Size (tiles) | Coins | Stars | Enemies | Growth mushrooms | Energy flowers |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | (11, 11) | (5, 10) |
-| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | (56, 14) | (21, 14), (46, 14) |
-| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | (1, 14), (25, 14) | (10, 12), (56, 13) |
+| ID | File | Name | Size (tiles) | Coins | Stars | Enemies | Growth mushrooms | Energy flowers | Bricks | Reward blocks |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `world-01-level-01` | `world-01/level-01.json` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | (11, 11) | (5, 10) | 3 | 2 (coin, growth) |
+| `world-01-level-02` | `world-01/level-02.json` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | (56, 14) | (21, 14), (46, 14) | 4 | 2 (bomb, shield) |
+| `world-01-level-03` | `world-01/level-03.json` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | (1, 14), (25, 14) | (10, 12), (56, 13) | 4 | 3 (coin, magnet, energy) |
 
 The **default level** is `world-01-level-01` (`DEFAULT_LEVEL_ID`).
 
@@ -153,8 +158,9 @@ for performance.
 
 ## 5. Object behavior
 
-The schema accepts `coin`, `star`, `enemy`, `bomb`, `shield`, `magnet`, `growth-mushroom` and
-`energy-flower` objects with optional unique IDs.
+The schema accepts `coin`, `star`, `enemy`, `bomb`, `shield`, `magnet`, `growth-mushroom`,
+`energy-flower` objects with optional unique IDs, and `interactive-block` objects with a required
+unique ID.
 
 | Type | Implemented | Behavior |
 | --- | --- | --- |
@@ -166,6 +172,7 @@ The schema accepts `coin`, `star`, `enemy`, `bomb`, `shield`, `magnet`, `growth-
 | `magnet` | yes | Refreshes temporary attraction of nearby, reachable coins |
 | `growth-mushroom` | yes | Queues a temporary big form or refreshes active growth |
 | `energy-flower` | yes | Grants/refreshes the temporary Energy Ball ability, with no score |
+| `interactive-block` | yes | One tile-sized solid brick or one-use reward block; see 5.1 |
 
 Rules:
 
@@ -197,7 +204,65 @@ Level 02 uses the existing 128 px overhang at column 56, above the growth pickup
 at (56, 14). Approach along the ground from column 57 and step back to the right
 to clear the overhang. The main route can bypass the pickup.
 
-### 5.1 Enemy objects
+### 5.1 Interactive blocks
+
+```json
+{ "id": "brick-01", "type": "interactive-block", "blockId": "breakable-brick", "x": 13, "y": 10 }
+```
+
+```json
+{
+  "id": "reward-01",
+  "type": "interactive-block",
+  "blockId": "reward-block",
+  "x": 3,
+  "y": 10,
+  "reward": { "type": "coin" }
+}
+```
+
+| Field | Rules |
+| --- | --- |
+| `id` | **Required** non-empty unique string; also the base of the released key `reward:<id>` |
+| `type` | `"interactive-block"` |
+| `blockId` | `breakable-brick` or `reward-block` |
+| `x`, `y` | Integer top-left tile inside the level |
+| `reward` | Required only for `reward-block`; one of `coin`, `bomb`, `shield`, `magnet`, `growth-mushroom`, `energy-flower`. Forbidden on bricks. |
+
+Placement rules (structural + loader validation):
+
+1. The block cell must be empty of solid terrain and inside the level.
+2. No two interactive blocks may occupy the same cell.
+3. The cell directly below must be empty so a player can reach the underside.
+4. A reward block needs the two cells above it clear (emergence + visual headroom) and no other
+   interactive block in those cells.
+5. A reward block needs solid terrain somewhere below in the same column, with at least one empty
+   cell between the block and that ground. Its reward rises above the block and settles into the
+   first open cell above the ground. This guarantees a reachable payout and avoids low-ceiling traps.
+6. Do not author a block inside an enemy spawn/patrol cell at ground level; its body would obstruct
+   the patrol. Floating blocks above a patrol are allowed but can make the bump harder while the
+   enemy is present.
+
+Gameplay rules:
+
+- Small form bumps a brick but cannot break it. Big form breaks it once.
+- Reward blocks work in both forms and become used after one payout; used blocks stay solid.
+- Bricks and reward blocks are head-bump-only in this milestone. Energy Balls and bombs treat intact
+  blocks as walls and pass through broken bricks; they never destroy or activate a block.
+- A coin reward grants its normal 100 points and increments the run coin count. Authored coin/star
+  totals and the rating denominator do not change; the rating numerator can include reward coins.
+- The loader/validator rejects invalid placements with field paths; blocks never silently replace
+  terrain or each other.
+
+Shipped placements (cell coordinates):
+
+| Level | Breakable bricks | Reward blocks |
+| --- | --- | --- |
+| 01 | (13,10), (14,10), (25,9) | (3,10) coin, (26,9) growth-mushroom |
+| 02 | (25,12), (26,12), (39,12), (45,13) | (30,12) bomb, (48,13) shield |
+| 03 | (25,12), (37,12), (38,11), (54,12) | (9,10) coin, (26,12) magnet, (65,12) energy-flower |
+
+### 5.2 Enemy objects
 
 ```json
 {
@@ -254,6 +319,15 @@ Archetype balance (health, speed, stompable, damage, score) is **not** authored 
     { "type": "coin", "x": 7, "y": 11 },
     { "id": "star-01", "type": "star", "x": 9, "y": 10 },
     { "type": "bomb", "x": 23, "y": 10 },
+    { "id": "brick-01", "type": "interactive-block", "blockId": "breakable-brick", "x": 13, "y": 10 },
+    {
+      "id": "reward-01",
+      "type": "interactive-block",
+      "blockId": "reward-block",
+      "x": 3,
+      "y": 10,
+      "reward": { "type": "coin" }
+    },
     {
       "id": "mushroom-01",
       "type": "enemy",
@@ -267,8 +341,8 @@ Archetype balance (health, speed, stompable, damage, score) is **not** authored 
 ```
 
 The shipped level 01 contains 12 coins, 2 collectible stars, 3 enemies, 2 bomb pickups,
-one shield, one magnet, one growth mushroom and one energy flower. All placements use the same JSON
-array and share duplicate-ID validation.
+one shield, one magnet, one growth mushroom, one energy flower, 3 breakable bricks and 2 reward
+blocks. All placements use the same JSON array and share duplicate-ID validation.
 
 ## 7. Validation and loading errors
 
@@ -303,7 +377,10 @@ Rules still enforced by the validator:
 7. Object type/coords bounds + unique non-empty IDs.
 8. Enemy objects: non-empty kebab-case `enemyId`, ordered in-bounds patrol columns containing the
    enemy cell. The loader additionally cross-checks the archetype registry and terrain support.
-9. Malformed JSON becomes a single `$` parse error.
+9. Interactive blocks: required ID, supported `blockId`, reward only on `reward-block`, supported
+   reward type, no solid/duplicate occupancy, empty underside, valid reward emergence and settle
+   path. The loader reports every issue before creating blocks.
+10. Malformed JSON becomes a single `$` parse error.
 
 Earlier schema-1 levels are still valid without growth objects.
 
@@ -396,6 +473,8 @@ top is also 704, so the player starts standing correctly.
 - `content/config/enemies.json` holds archetype balance; `content/config/combat.json` holds player
   health, invulnerability, knockback, stomp bounce and contact tolerance.
 - `content/config/weapons.json` holds implemented weapon tuning and temporary ability duration.
+- `content/config/interactive-blocks.json` holds bump/break/reward animation tuning and the
+  form(s) allowed to break bricks.
 - `content/config/level-order.json` holds the campaign order.
 - `matio.save.v1` in localStorage holds a versioned save. Menu displays unlocked levels and best
   ratings; GameScene/ResultScene read the same validated store.
@@ -439,6 +518,21 @@ This works because `patrol` is an implemented behavior. JSON cannot create **new
 behavior value (for example `"chase"` or `"flyer"`) requires an implementation in
 `src/systems/enemy-behaviors.ts`, integration in `Enemy.tick()`, validation in
 `validateEnemiesConfig()`, and tests. Do not add a behavior name to JSON expecting it to work.
+
+### 9.4 How to add an interactive block (JSON only)
+
+1. Choose a unique ID, for example `brick-05`.
+2. Confirm the target cell is empty of solid terrain; choose a cell with an empty cell below it.
+3. Add the object to the level's `objects` array:
+   `{ "id": "brick-05", "type": "interactive-block", "blockId": "breakable-brick", "x": 20, "y": 10 }`.
+4. For a reward block, add `"reward": { "type": "coin" }` (or another supported type) and make sure
+   the two cells above and the settle column below are clear.
+5. Reload with `?level=<id>`. Invalid placements show the normal level error panel.
+6. Run `npm run test`; the shipped-content test validates every block in every level.
+
+Changing break permission, timings or debris count is configuration-only in
+`content/config/interactive-blocks.json`. Adding another block archetype or reward behavior requires
+TypeScript, validation and tests; see [EXTENDING_MATIO.md](EXTENDING_MATIO.md).
 
 ## 10. Evolution policy
 

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "bump": {
+    "durationMs": 90,
+    "offsetPx": 6
+  },
+  "break": {
+    "durationMs": 160,
+    "debrisLifetimeMs": 420,
+    "debrisPieces": 6,
+    "forms": ["big"]
+  },
+  "reward": {
+    "emergeDurationMs": 280,
+    "settleDurationMs": 220,
+    "risePx": 12
+  }
+}

@@ -12,6 +12,7 @@ import { formatPlayerConfigErrors, getPlayerConfigResult } from './core/player-c
 import { getPlayerFormsConfigResult } from './core/player-forms-config';
 import { getScoringConfigResult } from './core/scoring-config';
 import { getWeaponConfigResult } from './core/weapon-config';
+import { getInteractiveBlocksConfigResult } from './core/interactive-block-config';
 import { exposeGameForDebug, removeGameDebugBridge } from './core/dev-bridge';
 import { validateLevelOrderReferences } from './systems/progression';
 
@@ -25,6 +26,7 @@ const combatConfigResult = getCombatConfigResult();
 const bombConfigResult = getBombConfigResult();
 const effectsConfigResult = getEffectsConfigResult();
 const weaponConfigResult = getWeaponConfigResult();
+const interactiveBlocksConfigResult = getInteractiveBlocksConfigResult();
 const levelOrderResult = getLevelOrderResult();
 const problems: string[] = [];
 
@@ -66,6 +68,13 @@ if (!weaponConfigResult.ok) {
   problems.push(`content/config/weapons.json\n${details}`);
 }
 
+if (!interactiveBlocksConfigResult.ok) {
+  const details = interactiveBlocksConfigResult.errors
+    .map(({ path, message }) => `${path}: ${message}`)
+    .join('\n');
+  problems.push(`content/config/interactive-blocks.json\n${details}`);
+}
+
 if (!levelOrderResult.ok) {
   problems.push(
     `content/config/level-order.json\n${levelOrderResult.errors
@@ -102,6 +111,7 @@ if (problems.length > 0) {
   bombConfigResult.ok &&
   effectsConfigResult.ok &&
   weaponConfigResult.ok &&
+  interactiveBlocksConfigResult.ok &&
   levelOrderResult.ok
 ) {
   const game = new Phaser.Game(createGameConfig(playerConfigResult.value));

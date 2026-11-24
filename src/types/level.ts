@@ -10,6 +10,8 @@
  * and will live in gameplay configuration, never in level files.
  */
 
+import type { LevelInteractiveBlockObject } from './interactive-block';
+
 export const LEVEL_SCHEMA_VERSION = 1 as const;
 export const DEFAULT_TILE_SIZE = 64 as const;
 
@@ -17,13 +19,23 @@ export const DEFAULT_TILE_SIZE = 64 as const;
 export const MAX_LEVEL_DIMENSION = 512;
 
 export const TERRAIN_TYPES = ['ground', 'platform', 'block', 'water'] as const;
-export const OBJECT_TYPES = ['coin', 'star', 'bomb', 'shield', 'magnet', 'growth-mushroom', 'energy-flower', 'enemy'] as const;
+export const OBJECT_TYPES = [
+  'coin',
+  'star',
+  'bomb',
+  'shield',
+  'magnet',
+  'growth-mushroom',
+  'energy-flower',
+  'enemy',
+  'interactive-block',
+] as const;
 
 export type TerrainType = (typeof TERRAIN_TYPES)[number];
 export type LevelObjectType = (typeof OBJECT_TYPES)[number];
 
-/** Object types that are not enemy placements (collectibles and power-ups). */
-export type LevelItemObjectType = Exclude<LevelObjectType, 'enemy'>;
+/** Object types that are not enemy or interactive-block placements. */
+export type LevelItemObjectType = Exclude<LevelObjectType, 'enemy' | 'interactive-block'>;
 
 /** Integer tile coordinate. */
 export interface GridPoint {
@@ -84,7 +96,7 @@ export interface LevelEnemyObject {
   patrol: LevelEnemyPatrolBounds;
 }
 
-export type LevelObject = LevelItemObject | LevelEnemyObject;
+export type LevelObject = LevelItemObject | LevelEnemyObject | LevelInteractiveBlockObject;
 
 export function isEnemyObject(object: LevelObject): object is LevelEnemyObject {
   return object.type === 'enemy';

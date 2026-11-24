@@ -180,6 +180,37 @@ Not implemented by configuration alone:
 Adding any of these requires a new validated field, code in the weapon system/entity, lifecycle
 rules, tests and documentation. Do not add unused Level 2/3 definitions in advance.
 
+## 9. Interactive blocks and reward extensions
+
+Current reference implementation: `breakable-brick` and `reward-block`, both one tile.
+
+### Tuning only
+
+`content/config/interactive-blocks.json` controls bump duration/offset, break fade/debris, the
+allowed break forms and reward emerge/settle timings. A new level placement is also JSON-only.
+
+### New block archetype
+
+**TypeScript required.** Add the ID to `INTERACTIVE_BLOCK_IDS`, validate it in
+`level-validator.ts`, plan its geometry in `level-geometry.ts`, add its visual to
+`interactive-block-textures.ts`/`InteractiveBlock.ts`, add rules in `block-rules.ts` and wire them
+in `InteractiveBlockSystem.ts`. Extend `validateInteractiveBlockPlacements()` and add content tests.
+Do not add a generic block script engine; each archetype needs reviewed behavior.
+
+### New reward type
+
+**TypeScript required** unless it reuses an existing collectible/effect pickup type. Add it to
+`BLOCK_REWARD_TYPES`, the validator, `InteractiveBlockSystem.activateReward()` and the relevant
+pickup pipeline (CollectionSystem, BombSystem or a future effect). Keep one reward per block and one
+stable `reward:<block id>` key. Bomb rewards reuse BombSystem's pickup group; do not create a second
+inventory.
+
+### Head-bump changes
+
+Keep `isHeadBump()` in `block-rules.ts` and test it with body geometry. Do not use current velocity
+alone, do not treat any overlap as a head hit, and keep the per-block latch/rearm rule. Enemy
+knock-up, weapon damage to blocks and multi-coin/hidden blocks are explicitly future work.
+
 ---
 
 ## Configuration-only vs TypeScript (summary)
@@ -190,8 +221,9 @@ rules, tests and documentation. Do not add unused Level 2/3 definitions in advan
 | Rebalance enemies | yes (`enemies.json`) |
 | Rebalance scoring/levels order | yes (`scoring.json`, `level-order.json`) |
 | Rebalance effects/bombs/Energy Ball | yes (`effects.json`, `bombs.json`, `weapons.json`) |
-| Add a new level / move objects | yes |
+| Rebalance block animations/break forms | yes (`interactive-blocks.json`) |
+| Add a new level / move objects / place a block | yes |
 | Add a new archetype using `patrol` | yes |
-| Add a new object/enemy/weapon/effect **type** | no |
-| Add a new behavior, form, projection rule or upgrade tier | no |
+| Add a new object/enemy/weapon/effect/block **type** | no |
+| Add a new behavior, form, projection rule, block archetype or reward behavior | no |
 | Add audio | no (not implemented) |

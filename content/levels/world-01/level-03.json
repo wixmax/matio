@@ -139,6 +139,34 @@
       "x": 63,
       "y": 14,
       "patrol": { "minX": 62, "maxX": 63 }
+    },
+    { "id": "brick-01", "type": "interactive-block", "blockId": "breakable-brick", "x": 25, "y": 12 },
+    { "id": "brick-02", "type": "interactive-block", "blockId": "breakable-brick", "x": 37, "y": 12 },
+    { "id": "brick-03", "type": "interactive-block", "blockId": "breakable-brick", "x": 38, "y": 11 },
+    { "id": "brick-04", "type": "interactive-block", "blockId": "breakable-brick", "x": 54, "y": 12 },
+    {
+      "id": "reward-01",
+      "type": "interactive-block",
+      "blockId": "reward-block",
+      "x": 9,
+      "y": 10,
+      "reward": { "type": "coin" }
+    },
+    {
+      "id": "reward-02",
+      "type": "interactive-block",
+      "blockId": "reward-block",
+      "x": 26,
+      "y": 12,
+      "reward": { "type": "magnet" }
+    },
+    {
+      "id": "reward-03",
+      "type": "interactive-block",
+      "blockId": "reward-block",
+      "x": 65,
+      "y": 12,
+      "reward": { "type": "energy-flower" }
     }
   ]
 }

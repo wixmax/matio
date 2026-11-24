@@ -7,25 +7,27 @@
 - **Stack:** Phaser 4.2.1, TypeScript 7.0.2 (strict), Vite 8.3.8, Vitest 5.1.1, npm, JSON content
 - **Runtime:** browser (WebGL with Canvas fallback), 1280×720 logical, landscape-first, touch parity
 - **Development mode:** local only. No backend, no deployment, no analytics, no cloud services.
-- **Git baseline for this milestone:** `396698dd4cde31533ca4b542a2544d34990db114`
-  (`feat(player): add growth form and safe transformations`)
-- **Task 007-B commit:** one commit on top of the baseline,
-  `feat(combat): add extensible energy ball powerup`.
+- **Git baseline for this milestone:** `1fadcee372890b975fe4653f67891942d3aa9fa9`
+  (`feat(combat): add extensible energy ball powerup`)
+- **Task 008-A commit:** one commit on top of the baseline,
+  `feat(levels): add breakable bricks and reward blocks`.
 
 ## Last completed task
 
-**Task 007-B — Energy Ball combat, extensible weapons, AI documentation and audio planning.**
+**Task 008-A — interactive bricks, head-bump detection and reward blocks.**
 
 Implemented and verified in the working tree:
 
-- one Energy Ball weapon defined in `content/config/weapons.json` (schema 1);
-- `energy-flower` level pickups in all three levels (1 / 2 / 2);
-- a temporary 20-second ability with cooldown, projectile cap and target cap;
-- bouncing Arcade projectiles with wall/ceiling destruction and lifetime cleanup;
-- immediate damage through `EnemySystem`/`Enemy`/`EnemyLedger`;
-- C/K and touch FIRE input, one shot per press, five-pointer budget;
-- `ENERGY · Ns` HUD line;
-- `npm run verify`, four design/maintenance documents and this status page.
+- additive schema-1 `interactive-block` objects (`breakable-brick`, `reward-block`);
+- validated `content/config/interactive-blocks.json` before boot;
+- previous-geometry head-bump classification with a per-block rearm latch;
+- Small bumps / Big breaks, immediate body removal and procedural debris;
+- one-use reward blocks with `unused → activating → used` and a solid used state;
+- coin/bomb/shield/magnet/growth/energy rewards routed through existing systems;
+- deterministic emerge-and-settle release with clear level validation;
+- live solid queries for enemies/projectiles/magnet/growth;
+- blocks in all three shipped levels, fall/retry/terminal lifecycle;
+- unit, content and browser harness coverage plus documentation.
 
 Documentation (including this file) is the only place future work is listed. Anything below
 marked **planned** is not implemented.
@@ -41,7 +43,8 @@ marked **planned** is not implemented.
 | Bombs and explosion combat | Implemented |
 | Shield, coin magnet, growth mushroom | Implemented |
 | Energy flower + Energy Ball | Implemented |
-| Breakable/reward blocks, pipes, secret rooms | Not started |
+| Breakable bricks, reward blocks, head bumps | Implemented |
+| Pipes, secret rooms, moving platforms | Not started |
 | Audio engine, music, SFX | Not started (contract documented only) |
 | Android/Capacitor packaging | Not started |
 
@@ -58,6 +61,8 @@ marked **planned** is not implemented.
 - `EffectSystem` + `ActiveEffects` for shield, magnet, growth and weapon-ability clocks.
 - `PlayerTransformation` for safe small/big body resizing.
 - `EnergyBallSystem` + `EnergyBall` for the Energy Ball ability.
+- `InteractiveBlockSystem` + `InteractiveBlock` for solid bricks, Big-form breaks, one-use reward
+  blocks, scripted reward release and live solid queries.
 - `GameScene` orchestration, `ResultScene`, `GameOverScene`, `MenuScene`.
 - `ScoringConfig`, `SaveStore`, campaign order, result rating.
 
@@ -70,9 +75,13 @@ marked **planned** is not implemented.
   human playthrough on mid-range mobile hardware.
 - Wall/ceiling durability assumes the current 64 px tile geometry; very thin future terrain is not
   protected against sub-frame tunneling.
+- Interactive-block mechanics were verified with a deterministic browser harness in all three
+  levels (including natural keyboard jumps and scripted positioning), not a full human playthrough.
+- Block reward reachability assumes the authored settle column and the provided level geometry;
+  automatic reachability/pathfinding is intentionally not implemented.
 - There is no audio to verify because audio is intentionally unimplemented.
-- Production preview is smoke-tested (boot/menu/level load); the dev bridge and level selector are
-  absent there by design.
+- Production preview was smoke-tested (menu load and START GAME into level 01 with a real browser
+  click); the dev bridge and level selector are absent there by design.
 
 ## Documentation map
 
@@ -88,9 +97,9 @@ marked **planned** is not implemented.
 
 ## Roadmap (planned, not implemented)
 
-1. **Task 008-A:** interactive blocks — breakable bricks, reward blocks, hit-from-below
-   interactions, item release, used-block state.
-2. Pipes and secret/underground areas.
+1. Pipes, secret/underground areas and transitions.
+2. Hidden/multi-coin blocks, enemy bump reactions and weapon interactions with destructible terrain
+   as separate reviewed tasks.
 3. First centralized `AudioManager`, original SFX, then music and audio settings.
 4. Enemy behavior extensions (chase, flyers, projectiles) as separate reviewed tasks.
 5. Weapon/character upgrades and permanent progression only after an explicit task.
@@ -109,6 +118,12 @@ The suggested audio sequencing is documented in [ARCHITECTURE.md](ARCHITECTURE.m
 - `CollectionSystem.onWeaponPickup` — route future weapon pickups without duplicating collection
   idempotency.
 - `EnemySystem.damageEnemy()` — the only external direct-hit damage entry point.
+- `interactive-blocks.json` + `types/interactive-block.ts` — validated block tuning and archetypes.
+- `block-rules.ts` — pure head-bump classification, break eligibility, reward state guard,
+  release planning and semantic placement validation.
+- `InteractiveBlockSystem` — player collider, one-use reward settlement, debris and lifecycle.
+- `InteractiveBlockSystem.solidRects` — live block obstruction for magnet/growth queries.
+- `reward:<block id>` — stable released-collectible identity forwarded to the existing ledger.
 
 ## Outstanding technical risks
 
@@ -119,3 +134,8 @@ The suggested audio sequencing is documented in [ARCHITECTURE.md](ARCHITECTURE.m
 - Fast projectiles against future thin geometry may tunnel; current terrain is 64 px tiles.
 - Level balance is placeholder and scripted verification does not prove feel.
 - `window.__MATIO_GAME__` exists in development only; tooling must not rely on it in production.
+- Reward coins increase the run coin count/score; authored totals remain the rating denominator.
+  A result can therefore show more collected coins than the authored total.
+- Block break/debris visuals use short tweens; the deterministic release path uses gameplay delta.
+  Manual-frame browser checks verify logic, not final visual timing on every device.
+- Big-form break eligibility is data-driven (`break.forms`); the shipped content allows only Big.

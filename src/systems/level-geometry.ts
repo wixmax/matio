@@ -8,13 +8,17 @@ import {
   isEnemyObject,
   type GridPoint,
   type LevelDefinition,
+  type LevelObject,
   type LevelTerrainArea,
   type TerrainType,
 } from '../types/level';
+import { isInteractiveBlockObject } from '../types/interactive-block';
 import type {
   CameraFrame,
+  InteractiveBlockPlacement,
   LevelGeometry,
   PixelRect,
+  RewardReleasePlan,
   TerrainPlacement,
   WorldPoint,
 } from '../types/level-runtime';
@@ -79,6 +83,7 @@ export function createLevelGeometry(level: LevelDefinition): LevelGeometry {
 
   const collectibles = createCollectiblePlacements(level);
   const enemies = createEnemyPlacements(level);
+  const interactiveBlocks = createInteractiveBlockPlacements(level);
 
   return {
     levelId: level.id,
@@ -91,7 +96,136 @@ export function createLevelGeometry(level: LevelDefinition): LevelGeometry {
     collectibles,
     collectibleTotals: countCollectiblePlacements(collectibles),
     enemies,
+    interactiveBlocks,
   };
+}
+
+/**
+ * Builds interactive-block placements from validated level objects.
+ *
+ * A block occupies exactly one tile; its pixel rect is the tile rectangle (not a
+ * center anchor). Reward release plans are precomputed here so runtime code
+ * never has to guess where an item can land.
+ */
+export function createInteractiveBlockPlacements(
+  level: LevelDefinition,
+): InteractiveBlockPlacement[] {
+  const placements: InteractiveBlockPlacement[] = [];
+
+  level.objects.forEach((object) => {
+    if (!isInteractiveBlockObject(object)) {
+      return;
+    }
+
+    const cell = { x: object.x, y: object.y };
+    const rect = tileRectToPixel(
+      { type: 'block', x: object.x, y: object.y, width: 1, height: 1 },
+      level.tileSize,
+    );
+    const release = object.blockId === 'reward-block'
+      ? planRewardRelease(level, cell)
+      : null;
+
+    placements.push({
+      key: `block:${object.id}`,
+      id: object.id,
+      blockId: object.blockId,
+      cell,
+      rect,
+      reward: object.reward?.type ?? null,
+      release: release !== null && release.ok ? release.plan : null,
+    });
+  });
+
+  return placements;
+}
+
+export type RewardReleaseFailure =
+  | 'blocked-emergence'
+  | 'no-ground-below'
+  | 'no-settle-space'
+  | 'blocked-settle-path';
+
+export type RewardReleaseResolution =
+  | { readonly ok: true; readonly plan: RewardReleasePlan }
+  | { readonly ok: false; readonly reason: RewardReleaseFailure };
+
+/**
+ * Deterministic reward release geometry.
+ *
+ * 1. The reward emerges into the cell above the block and needs one clear cell
+ *    above that for visual headroom.
+ * 2. It settles into the first open cell above solid ground in the same column.
+ *
+ * The landing cell is below the block and above a walkable surface, so a
+ * released reward cannot float permanently above a solid block or disappear
+ * under a low ceiling.
+ */
+export function planRewardRelease(
+  level: Pick<LevelDefinition, 'terrain' | 'size' | 'objects' | 'tileSize'>,
+  blockCell: GridPoint,
+): RewardReleaseResolution {
+  const emergeCell = { x: blockCell.x, y: blockCell.y - 1 };
+  const headroomCell = { x: blockCell.x, y: blockCell.y - 2 };
+
+  if (
+    !isCellInside(level.size, emergeCell) ||
+    !isCellInside(level.size, headroomCell) ||
+    findSolidTerrainAtCell(level, emergeCell) !== null ||
+    findSolidTerrainAtCell(level, headroomCell) !== null ||
+    hasInteractiveBlockAt(level.objects, emergeCell) ||
+    hasInteractiveBlockAt(level.objects, headroomCell)
+  ) {
+    return { ok: false, reason: 'blocked-emergence' };
+  }
+
+  let groundRow: number | null = null;
+
+  for (let row = blockCell.y + 1; row < level.size.height; row += 1) {
+    const cell = { x: blockCell.x, y: row };
+
+    if (hasInteractiveBlockAt(level.objects, cell)) {
+      return { ok: false, reason: 'blocked-settle-path' };
+    }
+
+    if (findSolidTerrainAtCell(level, cell) !== null) {
+      groundRow = row;
+      break;
+    }
+  }
+
+  if (groundRow === null) {
+    return { ok: false, reason: 'no-ground-below' };
+  }
+
+  const landingCell = { x: blockCell.x, y: groundRow - 1 };
+
+  if (landingCell.y <= blockCell.y) {
+    return { ok: false, reason: 'no-settle-space' };
+  }
+
+  return {
+    ok: true,
+    plan: {
+      emergeCell,
+      emerge: cellCenter(emergeCell, level.tileSize),
+      landingCell,
+      landing: cellCenter(landingCell, level.tileSize),
+    },
+  };
+}
+
+function hasInteractiveBlockAt(objects: readonly LevelObject[], cell: GridPoint): boolean {
+  return objects.some((object) =>
+    isInteractiveBlockObject(object) && object.x === cell.x && object.y === cell.y,
+  );
+}
+
+function isCellInside(
+  size: { readonly width: number; readonly height: number },
+  cell: GridPoint,
+): boolean {
+  return cell.x >= 0 && cell.y >= 0 && cell.x < size.width && cell.y < size.height;
 }
 
 /**
@@ -183,7 +317,7 @@ function countCollectiblePlacements(
  * validation.
  */
 export function findSolidTerrainAtCell(
-  level: LevelDefinition,
+  level: Pick<LevelDefinition, 'terrain'>,
   cell: GridPoint,
 ): LevelTerrainArea | null {
   for (const area of level.terrain) {

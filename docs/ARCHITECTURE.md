@@ -1,5 +1,68 @@
 # Architecture
 
+## Task 008-A interactive blocks
+
+Level schema 1 gains one additive object type, `interactive-block`, with two archetypes:
+`breakable-brick` and `reward-block`. It has a required unique `id`, a tile cell and an optional
+single `reward` (`coin`, `bomb`, `shield`, `magnet`, `growth-mushroom`, `energy-flower`). The
+validator rejects unknown archetypes/rewards, missing IDs, rewards on bricks, duplicate IDs and
+invalid JSON shapes. `block-rules.ts` adds semantic checks: no solid-terrain overlap, no duplicate
+block occupancy, an empty cell below every block, two clear cells above reward blocks, and a valid
+settle path to solid ground below reward blocks. `LevelLoader` runs both validators before creating
+anything and returns an `invalid-level` panel with field paths on failure.
+
+`content/config/interactive-blocks.json` (schema 1) is validated before boot by
+`validateInteractiveBlocksConfig()`: finite bump/break timings, debris count/lifetime, reward
+emerge/settle timings and the explicit `break.forms` list. The shipped list is `["big"]`, so break
+permission is data-driven but still restricted to Big form.
+
+### Entity, body and visuals
+
+`InteractiveBlock` is a procedural 64×64 image with one static Arcade body per authored cell.
+Bump tweens move only the image; the body stays fixed. `ensureInteractiveBlockTextures()` creates
+brick, reward, used and debris textures once per scene. `InteractiveBlockSystem` owns the
+player/block collider, states, reward release, debris and cleanup. Broken bricks call
+`markDestroyed()` synchronously: state becomes `destroyed`, `body.enable = false`, collision checks
+are disabled and the visual fades separately. Reward blocks move
+`unused → activating → used`; the used block keeps its static body forever.
+
+### Head-bump classification
+
+`isHeadBump()` uses previous-step body geometry (`body.prev.y`), current body edges, horizontal
+overlap, Arcade `blocked.up`/`touching.up`, the block underside and an actual upward movement.
+It rejects side contacts, landing on top, downward contact, growth/teleport overlaps where the
+previous top was already above the underside, and bodies without horizontal overlap. A per-block
+`contactLatched` flag prevents repeated reactions across frames of one held jump; the latch clears
+only after real separation (`isPlayerPressedFromBelow`). The same upward contact can therefore not
+pay out twice, while a later jump can.
+
+### Reward release and the collectible pipeline
+
+A reward block claims `activating` exactly once. Its reward is created once with the stable key
+`reward:<block id>`. The release path is scripted from gameplay delta, not tween callbacks: it rises
+into the cell above the block, then settles into the first open cell above solid ground in the same
+column. The body stays disabled until the path ends, then the normal pickup path takes over.
+Non-bomb rewards use `Collectible` and `CollectionSystem`; bomb rewards use BombSystem's existing
+pickup group, inventory cap and overlap. Reward coins are appended to the magnet's live coin list
+after release. No reward system owns score, inventory or effects.
+
+Authored coin/star totals and the rating denominator remain unchanged. A reward coin increases the
+run coin count/score (and therefore the rating numerator); the authored total is still the
+denominator and `computeRatingStars()` clamps the numerator. This policy is documented in
+`GAMEPLAY_MECHANICS.md`.
+
+### Mutable solid state
+
+Intact block bodies are appended to the same collider list passed to enemies, bombs and Energy Balls;
+broken bricks keep their disabled body in the list, so Arcade ignores them without rebuilding
+colliders. `InteractiveBlockSystem.solidRects` exposes only intact rectangles; `GameScene` composes
+it with terrain rectangles for the magnet and growth-clearance queries. This keeps one live source
+of block solidity instead of parallel collision maps.
+
+Fall respawn preserves block state. Retry/scene restart recreates blocks from JSON. Victory, Game
+Over and shutdown freeze the collider, settle in-flight rewards safely and destroy temporary debris;
+audio is still planned-only.
+
 ## Task 007-B Energy Ball and weapon extension
 
 `content/config/weapons.json` (schema 1) is validated before boot. The registry contains exactly the
@@ -156,14 +219,15 @@ content/config/           Validated gameplay config (player.json)
 src/core/                 Composition root: game config, constants, level catalog/order,
                           scoring/save singletons, dev bridge
 src/scenes/               Boot, Menu, Game and Result scenes (lifecycle/orchestration)
-src/entities/             Player, Collectible, Enemy and procedural placeholder textures
+src/entities/             Player, Collectible, Enemy, EnergyBall, InteractiveBlock and
+                          procedural placeholder textures
 src/systems/              Pure rules + Phaser-aware orchestration:
                           validators, scoring, progression, save, jump rules, geometry,
-                          combat rules, player health, patrol behavior, enemy ledger,
+                          combat rules, block rules, player health, patrol behavior, enemy ledger,
                           LevelRepository, LevelLoader, CollectionSystem, EnemySystem, BombSystem,
-                          EffectSystem, EnergyBallSystem
+                          EffectSystem, EnergyBallSystem, InteractiveBlockSystem
 src/factories/            Phaser construction: terrain, backdrop, goal marker,
-                          collectibles and enemies
+                          collectibles, enemies and interactive blocks
 src/input/                Unified keyboard/touch input and pure input resolution
 src/ui/components/        Reusable UI: text, button, HUD, header, debug/error panels
 src/ui/screens/           Future composed UI screens (pause, shop)
@@ -190,9 +254,9 @@ types -> (nothing, no Phaser)
 ```
 
 `types/` never imports Phaser. `LevelRepository`, `level-geometry`, validators, scoring, progression,
-save rules, jump rules, combat rules, player health, patrol behavior, projectile rules and the enemy
-ledger stay engine-free, as do `ActiveEffects` and the effect rules. Phaser-aware systems wire those
-rules to the game.
+save rules, jump rules, combat rules, block rules, player health, patrol behavior, projectile rules
+and the enemy ledger stay engine-free, as do `ActiveEffects` and the effect rules. Phaser-aware
+systems (including `InteractiveBlockSystem`) wire those rules to the game.
 
 ## 3. Scene lifecycle
 
@@ -276,10 +340,14 @@ core/level-repository  ──►  systems/LevelRepository
 - Rejects a spawn cell that overlaps solid terrain (`unsafe-spawn`) before creating anything.
 - Cross-checks every enemy placement against the registry and terrain safety before instantiating
   anything; unknown archetypes or unsafe cells return an `invalid-level` failure with field paths.
-- Builds geometry, backdrop, terrain, goal marker/sensor, scoring and effect pickups, and enemies.
-- Returns `LevelRuntime` with geometry, solid bodies, goal runtime, pickups, enemies and backdrop.
+- Cross-checks every interactive block (solid overlap, duplicate occupancy, underside access,
+  reward emergence/headroom and settle path) before instantiating anything.
+- Builds geometry, backdrop, terrain, goal marker/sensor, scoring/effect pickups, enemies and
+  interactive blocks.
+- Returns `LevelRuntime` with geometry, solid bodies, goal runtime, pickups, enemies, interactive
+  blocks and backdrop.
 - Does not create the player, input, camera, HUD or player-facing colliders/overlaps.
-- Logs scoring collectible totals and enemy counts in development.
+- Logs scoring collectible totals, enemy counts and block counts in development.
 
 ### TerrainFactory (`src/factories/TerrainFactory.ts`)
 
@@ -315,12 +383,16 @@ core/level-repository  ──►  systems/LevelRepository
 ### GameScene
 
 - Selects the level and renders a load error when necessary.
-- Creates the Player at the JSON feet anchor, one `PlayerHealth`, collectibles and enemies.
+- Creates the Player at the JSON feet anchor, one `PlayerHealth`, collectibles, enemies and the
+  interactive-block system (after collection wiring so rewards can join the same group).
 - Configures world/physics/camera bounds from the level dimensions.
-- Registers player/terrain collision, collection/goal overlaps and delegates enemy combat to
-  `EnemySystem`.
+- Registers player/terrain collision, collection/goal overlaps, the block system's player collider
+  and delegates enemy combat to `EnemySystem`.
+- Passes terrain + intact-block bodies to enemy/bomb/Energy Ball colliders and a live terrain+block
+  rectangle query to magnet/growth clearance.
 - Handles fall respawn, the development R shortcut, victory settlement and Game Over transition.
-- Never contains level layout data or combat classification rules.
+- Freezes blocks on victory/Game Over, destroys the block system on shutdown.
+- Never contains level layout data, combat classification or block classification rules.
 
 ## 5. Display and game configuration
 
@@ -436,8 +508,9 @@ model (`systems/player-health.ts`); the Player never decides how much damage it 
 - Phaser destroys display-list objects, physics bodies and colliders on scene shutdown; the scene does
   not manually destroy gameplay display objects.
 - `GameScene.handleShutdown` destroys `EnemySystem` (its two colliders), `BombSystem`,
-  `EnergyBallSystem`, `CollectionSystem`, the goal overlap, `InputManager`, guards camera teardown
-  order (`this.cameras?.main?.stopFollow()`) and clears its own references.
+  `EnergyBallSystem`, `InteractiveBlockSystem` (player collider, debris, in-flight release),
+  `CollectionSystem`, the goal overlap, `InputManager`, guards camera teardown order
+  (`this.cameras?.main?.stopFollow()`) and clears its own references.
 - The loader is synchronous, so a late async result cannot mutate a dead scene.
 - Retry (result or Game Over) starts a new GameScene, which creates fresh enemies, collectibles,
   ledgers and health. No run state is carried through the Phaser scene registry.
@@ -446,13 +519,14 @@ model (`systems/player-health.ts`); the Player never decides how much damage it 
 
 ## 13. Testing
 
-- 29 Vitest files, 339 tests: level validation, player config, input resolution, jump controller,
+- 31 Vitest files, 392 tests: level validation, player config, input resolution, jump controller,
   level geometry/camera frame, collectible geometry/content, collection ledger, scoring/rating,
   scoring config, level order/progression, level launch policy, save validation/progress/store,
   gameplay state, level repository/selector, enemy config, enemy placement safety, patrol behavior,
   stomp classification, player health/invulnerability, enemy ledger, combat config, effects,
-  player forms, weapon configuration, Energy Ball ability timing, projectile rules and content
-  placement.
+  player forms, weapon configuration, Energy Ball ability timing, projectile rules, interactive
+  block configuration, head-bump classification, break eligibility, reward state guards, release
+  planning and shipped block placement/content checks.
 - Repository/content tests read all shipped levels and assert validity, unique IDs, no collectible
   inside solid terrain, valid enemy archetypes, ordered patrols and solid ground below enemies.
 - Phaser construction, camera/input, collection overlap, victory, enemy stomps, player damage,
@@ -606,6 +680,17 @@ Spiky health is reserved for future combat methods and is not reduced by stompin
 | Add to Arcade group before body tuning | Group insertion can reset velocity, gravity and bounce |
 | Resolve collider arguments defensively | Phaser callback order is not guaranteed for group/array pairs |
 | Projectiles freeze and disappear on Victory/Game Over | No damage after terminal settlement |
+| Head bump uses previous body top, not velocity | Arcade separation can zero velocity before the callback |
+| Per-block latch clears only after real separation | Held jumps must not replay one upward contact |
+| Break disables the body before the visual tween | Collision removal must be immediate and deterministic |
+| Reward release settles through gameplay delta | Logic never depends on tween completion or tab timing |
+| Reward settles above ground below the block | A payout must stay reachable instead of floating over a solid block |
+| Bomb rewards reuse BombSystem's pickup group | One inventory/cap rule; no second bomb path |
+| Intact block bodies join existing colliders | Broken bricks stop blocking enemies/projectiles without array rebuilds |
+| Block rectangles are a live query | Magnet/growth see broken blocks disappear; no parallel collision map |
+| Reward keys are `reward:<authored block id>` | Stable, duplicate-free IDs without indices or randomness |
+| Reward coins count for run score but not the authored denominator | Authored level totals and rating thresholds stay fixed |
+| No weapon/explosion block damage in 008-A | The task defines head bumps only; future events need explicit rules |
 
 ## 20. Known risks
 
@@ -664,6 +749,7 @@ enemy.stomp              enemy.hit                enemy.defeat
 weapon.bomb.throw        weapon.bomb.explode
 weapon.energy.fire       weapon.energy.hit
 
+powerup.collect
 powerup.shield.collect   powerup.shield.absorb
 powerup.magnet.collect   powerup.growth.collect
 

@@ -1,4 +1,5 @@
-import type { TerrainType } from './level';
+import type { GridPoint, TerrainType } from './level';
+import type { BlockRewardType, InteractiveBlockId } from './interactive-block';
 import type { CollectibleCounts, CollectiblePlacement } from './collectible';
 import type { EnemyPlacement } from './enemy';
 import type { ValidationError } from './validation';
@@ -44,6 +45,40 @@ export interface TerrainPlacement {
   readonly solid: boolean;
 }
 
+/**
+ * Deterministic visual release path for a reward block.
+ *
+ * The reward rises into the cell above the block, then settles into the first
+ * open cell above solid ground in the same column. The landing cell is always
+ * reachable from the surface below the block; no reward is left floating above
+ * a solid block.
+ */
+export interface RewardReleasePlan {
+  /** Center of the cell directly above the block. */
+  readonly emerge: WorldPoint;
+  readonly emergeCell: GridPoint;
+  /** Center of the first open cell above solid terrain below the block. */
+  readonly landing: WorldPoint;
+  readonly landingCell: GridPoint;
+}
+
+/** A validated interactive-block placement converted to world pixels. */
+export interface InteractiveBlockPlacement {
+  /** Stable deterministic key: `block:<authored id>`. */
+  readonly key: string;
+  /** Authored id; also the base of the released reward's runtime key. */
+  readonly id: string;
+  readonly blockId: InteractiveBlockId;
+  /** Top-left cell in tile units. */
+  readonly cell: GridPoint;
+  /** One tile-sized solid pixel rectangle. */
+  readonly rect: PixelRect;
+  /** Configured reward type, or null for a breakable brick. */
+  readonly reward: BlockRewardType | null;
+  /** Required release plan for reward blocks; null for breakable bricks. */
+  readonly release: RewardReleasePlan | null;
+}
+
 export interface LevelGeometry {
   readonly levelId: string;
   readonly tileSize: number;
@@ -59,6 +94,8 @@ export interface LevelGeometry {
   readonly collectibleTotals: CollectibleCounts;
   /** Enemy objects converted to feet anchors and patrol pixel bounds. */
   readonly enemies: readonly EnemyPlacement[];
+  /** Interactive block placements, kept separate from static level terrain. */
+  readonly interactiveBlocks: readonly InteractiveBlockPlacement[];
 }
 
 /**

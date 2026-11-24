@@ -5,7 +5,11 @@ import { Collectible } from '../entities/Collectible';
 export interface CollectibleRuntime {
   /** Physics group used by one player/collectibles overlap. */
   readonly group: Phaser.Physics.Arcade.Group;
-  readonly coins: readonly Collectible[];
+  /**
+   * Mutable list of live coins for the magnet. Block-released coins are appended
+   * so they use the same attraction/collection path as authored coins.
+   */
+  readonly coins: Collectible[];
 }
 
 /**
@@ -24,4 +28,18 @@ export function createCollectibles(
   }
 
   return { group, coins: instances.filter((instance) => instance.collectibleType === 'coin') };
+}
+
+/**
+ * Creates a block-released pickup and inserts it into the shared collectible
+ * group. The caller disables its body during the emergence animation.
+ */
+export function createReleaseCollectible(
+  scene: Phaser.Scene,
+  group: Phaser.Physics.Arcade.Group,
+  placement: CollectiblePlacement,
+): Collectible {
+  const collectible = new Collectible(scene, placement);
+  group.add(collectible);
+  return collectible;
 }

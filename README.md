@@ -3,12 +3,18 @@
 A lightweight, modular 2D side-scrolling platformer built with **Phaser 4**, **TypeScript** and **Vite**.
 The project is developed incrementally, one reviewed milestone at a time.
 
-**Current status: Task 007-B — Energy Ball combat and weapon config seam.** The game boots into a
-menu with level selection, loads validated JSON levels and runs the full loop: collect coins/stars,
-stomp or avoid JSON-defined enemies, reach the goal, calculate score (including enemy defeats) and a
-1–3 star rating, save best results, unlock the next level and continue. Movement, variable jumping,
-coyote time, jump buffering, unified keyboard/touch controls, camera follow, respawn, player health,
-invulnerability, knockback, Game Over/retry and versioned local save are in place.
+**Current status: Task 008-A — interactive bricks, head bumps and reward blocks.** The game boots
+into a menu with level selection, loads validated JSON levels and runs the full loop: collect
+coins/stars, stomp or avoid JSON-defined enemies, bump/break bricks, activate reward blocks, reach
+the goal, calculate score (including enemy defeats) and a 1–3 star rating, save best results, unlock
+the next level and continue. Movement, variable jumping, coyote time, jump buffering, unified
+keyboard/touch controls, camera follow, respawn, player health, invulnerability, knockback,
+Game Over/retry and versioned local save are in place.
+
+Bricks and reward blocks are additive JSON objects in all three levels. Jump into a brick from below
+to bump it; only Big form breaks it, removing its solid collision. Reward blocks release one
+configured pickup (coin, bomb, shield, magnet, growth mushroom or energy flower) once and then stay
+solid. The item emerges above the block and settles onto the ground below so it remains reachable.
 
 Bombs, shields, magnets, growth mushrooms and energy flowers are placed in the level JSON. Throw
 bombs with X/J or the touch THROW button. Collect an energy flower, then press C/K or the touch FIRE
@@ -78,11 +84,11 @@ The development selector bypasses progression locks; production ignores it.
 
 Shipped levels:
 
-| ID | Name | Size (tiles) | Coins | Collectible stars | Enemies | Energy flowers |
-| --- | --- | --- | --- | --- | --- | --- |
-| `world-01-level-01` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | 1 |
-| `world-01-level-02` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | 2 |
-| `world-01-level-03` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | 2 |
+| ID | Name | Size (tiles) | Coins | Collectible stars | Enemies | Energy flowers | Bricks / reward blocks |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `world-01-level-01` | Green Introduction | 40×15 | 12 | 2 | 2 mushroom, 1 snail | 1 | 3 / 2 |
+| `world-01-level-02` | Platform Challenge | 80×18 | 26 | 3 | 3 mushroom, 2 snail, 1 spiky | 2 | 4 / 2 |
+| `world-01-level-03` | Water Valley | 90×16 | 29 | 4 | 3 mushroom, 1 snail, 2 spiky | 2 | 4 / 3 |
 
 Adding a level requires only a valid JSON file plus its ID in `level-order.json` — no TypeScript
 changes. See [How to create level-04.json](docs/LEVEL_FORMAT.md#9-how-to-create-level-04json-without-modifying-typescript).
@@ -126,6 +132,9 @@ Always run `verify` (or the three commands individually) before handing a task b
   active-projectile and target limits, bouncing Arcade projectiles, immediate shared enemy damage,
   wall/ceiling destruction and lifetime cleanup.
 - Bomb inventory and throws, shield absorption, coin magnet and safe small/big growth.
+- JSON interactive blocks: Small bumps bricks, Big breaks them, one-use reward blocks release
+  coins/bombs/shields/magnets/growth/energy through the existing systems, and broken bodies stop
+  obstructing the player, enemies, magnet paths and projectiles.
 - Simultaneous multitouch: direction + jump + throw + fire with a five-pointer budget.
 - Health-zero Game Over with RETRY/MAIN MENU; no completion bonus, record or unlock is written.
 - Falling preserves collected objects, run score, health and enemy states; Retry restores all.
@@ -148,7 +157,8 @@ Always run `verify` (or the three commands individually) before handing a task b
 - Vitest suites covering validation, geometry/camera math, collectibles, enemies, patrol
   behavior, stomp classification, player health/invulnerability, enemy scoring, gameplay states,
   scoring/rating, progression, saves, player configuration, input resolution, jump rules, effects,
-  weapons and projectile rules.
+  weapons, projectile rules, interactive-block configuration, head bumps and block content.
+- Browser harness `/tests/interactive-blocks-browser.html?level=<id>` for levels 01–03.
 
 ## Scoring and persistence
 
@@ -163,9 +173,10 @@ Always run `verify` (or the three commands individually) before handing a task b
 
 The HUD shows collected + enemy points while playing; the result adds the completion bonus. Rating
 rules: 1 star for completing, 2 stars at ≥70% of coins, 3 stars only when every coin and collectible
-star in the level is collected. Enemy defeats do not change the rating. A level with no coins/stars
-cannot receive a higher rating by default. A failed run shows only collected + enemy points and
-never writes a record or unlocks a level.
+star in the level is collected. Enemy defeats do not change the rating. Reward-block coins add to
+the run coin count/score, while authored coin totals and rating thresholds remain unchanged. A level
+with no coins/stars cannot receive a higher rating by default. A failed run shows only collected +
+enemy points and never writes a record or unlocks a level.
 
 Progress is stored locally under `matio.save.v1`. It keeps unlocked levels and per-level best score,
 best rating and best coin/star counts. There is no persistent wallet or shop. Corrupt/invalid saves
@@ -183,10 +194,11 @@ reset to first-launch data with a console diagnostic; an unsupported newer save 
 
 ## Explicitly not implemented yet
 
-Weapon upgrades/tiers, permanent power-up inventory, breakable/reward blocks, pipes and secret
-areas, chasing/flying enemies, enemy projectiles, bosses, permanent lives, persistent
-wallet/currency, shop, Tiled/editor integration, daily rewards, achievements, ads, cloud save,
-Android packaging, final art, music, sound effects and audio settings.
+Weapon upgrades/tiers, permanent power-up inventory, hidden/multi-coin blocks, block-bump enemy
+damage, weapon interactions with blocks, pipes and secret areas, moving platforms,
+chasing/flying enemies, enemy projectiles, bosses, permanent lives, persistent wallet/currency,
+shop, Tiled/editor integration, daily rewards, achievements, ads, cloud save, Android packaging,
+final art, music, sound effects and audio settings.
 
 ## Project layout
 
@@ -194,15 +206,15 @@ Android packaging, final art, music, sound effects and audio settings.
 public/assets/          Runtime art/audio, grouped by category (empty for now)
 content/levels/         Auto-discovered JSON levels (3 playable levels with enemies)
 content/config/         Validated gameplay config (player, enemies, combat, bombs, effects,
-                        forms, weapons, scoring, level order)
+                        forms, weapons, blocks, scoring, level order)
 src/core/               Game config, constants, config singletons, level catalog, dev bridge
 src/scenes/             Boot, Menu, Game, Result and GameOver scenes (lifecycle + orchestration)
-src/entities/           Player, Collectible, Enemy, EnergyBall and procedural textures
-src/systems/            Validators, scoring/progression/save rules, jump/combat/projectile rules,
-                        player health, patrol behavior, ledgers, game state,
+src/entities/           Player, Collectible, Enemy, EnergyBall, InteractiveBlock and textures
+src/systems/            Validators, scoring/progression/save rules, jump/combat/projectile/block
+                        rules, player health, patrol behavior, ledgers, game state,
                         level repository/geometry/loader, CollectionSystem, EnemySystem,
-                        BombSystem, EffectSystem, EnergyBallSystem
-src/factories/          Terrain, backdrop, goal marker, collectible and enemy construction
+                        BombSystem, EffectSystem, EnergyBallSystem, InteractiveBlockSystem
+src/factories/          Terrain, backdrop, goal marker, collectible, enemy and block construction
 src/input/              Unified input manager, touch controls, pure input resolution
 src/ui/components/      Reusable UI pieces (text, buttons, HUD, header, debug/error panels)
 src/ui/screens/         Future composed UI screens (pause, shop)

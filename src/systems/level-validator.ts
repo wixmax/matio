@@ -11,6 +11,13 @@ import {
   type LevelSize,
   type LevelTerrainArea,
 } from '../types/level';
+import {
+  BLOCK_REWARD_TYPES,
+  INTERACTIVE_BLOCK_IDS,
+  isBlockRewardType,
+  type BlockRewardSpec,
+  type LevelInteractiveBlockObject,
+} from '../types/interactive-block';
 import type { ValidationError, ValidationResult } from '../types/validation';
 
 /**
@@ -312,10 +319,87 @@ function readObjects(
       return;
     }
 
+    if (type === 'interactive-block') {
+      const block = readInteractiveBlock(entry, entryPath, id, x, y, errors);
+
+      if (block !== undefined) {
+        objects.push(block);
+      }
+      return;
+    }
+
     objects.push(id === undefined ? { type, x, y } : { id, type, x, y });
   });
 
   return objects;
+}
+
+/**
+ * Interactive blocks require an explicit id because it is also the basis of the
+ * released reward's stable runtime key. Breakable bricks cannot declare a
+ * reward; reward blocks must declare exactly one supported reward type.
+ */
+function readInteractiveBlock(
+  entry: UnknownRecord,
+  path: string,
+  id: string | undefined,
+  x: number,
+  y: number,
+  errors: ValidationError[],
+): LevelInteractiveBlockObject | undefined {
+  const blockId = readEnum(entry, 'blockId', path, INTERACTIVE_BLOCK_IDS, errors);
+
+  if (id === undefined) {
+    errors.push({ path: `${path}.id`, message: 'is required for an interactive-block object.' });
+  }
+
+  let reward: BlockRewardSpec | undefined;
+
+  if (blockId === 'breakable-brick') {
+    if (entry.reward !== undefined) {
+      errors.push({
+        path: `${path}.reward`,
+        message: 'is not supported on a breakable-brick; use a reward-block instead.',
+      });
+    }
+  } else if (blockId === 'reward-block') {
+    reward = readBlockReward(entry.reward, `${path}.reward`, errors);
+  }
+
+  if (id === undefined || blockId === undefined) {
+    return undefined;
+  }
+
+  if (blockId === 'reward-block' && reward === undefined) {
+    return undefined;
+  }
+
+  return reward === undefined
+    ? { id, type: 'interactive-block', x, y, blockId }
+    : { id, type: 'interactive-block', x, y, blockId, reward };
+}
+
+function readBlockReward(
+  value: unknown,
+  path: string,
+  errors: ValidationError[],
+): BlockRewardSpec | undefined {
+  if (!isRecord(value)) {
+    errors.push({ path, message: 'is required for a reward-block and must be an object with a type.' });
+    return undefined;
+  }
+
+  const typeValue = value.type;
+
+  if (typeof typeValue !== 'string' || !isBlockRewardType(typeValue)) {
+    errors.push({
+      path: `${path}.type`,
+      message: `must be one of: ${BLOCK_REWARD_TYPES.join(', ')} (received ${describeValue(typeValue)}).`,
+    });
+    return undefined;
+  }
+
+  return { type: typeValue };
 }
 
 /**

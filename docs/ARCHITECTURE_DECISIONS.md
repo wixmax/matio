@@ -124,3 +124,64 @@ included only where the current code still depends on them.
 - **Consequences:** Each task updates the relevant document and links instead of copying content.
 - **Evidence:** `docs/PROJECT_STATUS.md`, `GAMEPLAY_MECHANICS.md`, `EXTENDING_MATIO.md`, this file,
   `AGENTS.md`.
+
+## ADR-012 — Head bumps use previous body geometry and a per-block latch
+
+- **Context:** Arcade separation can run before the collider callback and can zero velocity; overlap
+  alone also happens on sides, landing and during growth.
+- **Decision:** Classify head hits from previous-step top, current body edges, horizontal overlap,
+  Arcade upward contact and actual upward movement. Latch one reaction per block and rearm only after
+  real separation.
+- **Rationale:** One rising contact cannot pay out repeatedly, while side/landing/growth contacts are
+  rejected deterministically.
+- **Consequences:** Any future block interaction must reuse `block-rules.isHeadBump()`; do not infer
+  hits from velocity or raw overlap.
+- **Evidence:** `src/systems/block-rules.ts`, `InteractiveBlockSystem.ts`, browser harness.
+
+## ADR-013 — Interactive blocks are static bodies with immediate state-driven collision removal
+
+- **Context:** A brick must stop obstructing the player, enemies, magnet paths and projectiles after
+  it breaks, without rebuilding level geometry every frame.
+- **Decision:** One static body per block; break disables the body and collision checks synchronously.
+  Intact block bodies join existing Arcade colliders; broken bodies stay in the list but are ignored.
+  Rectangle-based queries read `solidRects()` live.
+- **Rationale:** Immediate deterministic collision removal, no per-frame geometry rebuilds and one
+  source of block solidity.
+- **Consequences:** Breaking must happen in the block system; ad-hoc body removal or parallel solid
+  maps are forbidden.
+- **Evidence:** `InteractiveBlock.ts`, `InteractiveBlockSystem.ts`, `GameScene.ts`.
+
+## ADR-014 — Reward settlement uses gameplay delta, visuals stay separate
+
+- **Context:** Tween callbacks can be delayed or skipped when a tab is hidden, the scene ends or a
+  test steps frames manually; a payout must still be idempotent.
+- **Decision:** The logical state transition (`unused → activating → used`) and the release timer
+  live in the system and advance with gameplay delta. The emerge/settle path is scripted, and the
+  pickup body is enabled only at the end. Fade/debris/bump remain visual tweens.
+- **Rationale:** Deterministic one-time payout, safe terminal shutdown, no dependency on rendering.
+- **Consequences:** New reward animations must not own payout logic; scene freeze completes in-flight
+  releases.
+- **Evidence:** `InteractiveBlockSystem.update/advanceReward/freeze`, `block-rules.ts`.
+
+## ADR-015 — Reward pickups reuse existing pipelines and a stable key
+
+- **Context:** A reward may be a coin, bomb, shield, magnet, growth mushroom or energy flower.
+- **Decision:** Non-bomb rewards create a `Collectible` with key `reward:<authored block id>` and join
+  the existing collectible group/ledger. Bomb rewards use BombSystem's pickup group and inventory.
+  Reward coins add run score/count but authored coin/star totals remain the rating denominator.
+- **Rationale:** One score ledger, one inventory, one effect clock and duplicate-free dynamic IDs.
+- **Consequences:** Do not create a second reward inventory or score accumulator. Multi-coin/hidden
+  blocks need an explicit scoring policy.
+- **Evidence:** `InteractiveBlockSystem`, `CollectionSystem`, `BombSystem`, `scoring.ts`.
+
+## ADR-016 — Weapon/explosion block interaction is deliberately absent
+
+- **Context:** Bombs and Energy Balls already have terrain collision, and future design may let them
+  affect blocks.
+- **Decision:** In Task 008-A they only treat intact blocks as walls. No weapon damage or activation
+  path exists.
+- **Rationale:** The task defines head bumps as the only block interaction; mixing explosion damage
+  would create unrequested rules and bypass the physical-contact latch.
+- **Consequences:** A future task must add an explicit block-hit entry point, validation, balance and
+  tests. Do not route weapon damage through `EnemySystem`.
+- **Evidence:** `EnergyBallSystem`, `BombSystem`, `projectile-rules.ts`.

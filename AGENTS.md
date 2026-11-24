@@ -1,5 +1,19 @@
 # AGENTS.md — Instructions for AI Coding Agents
 
+Task 008-A block rules: validate `content/config/interactive-blocks.json` before boot. Level schema
+1 accepts additive `interactive-block` objects with a required unique id; only `breakable-brick` and
+`reward-block` exist. Validate placement (no solid/duplicate occupancy, empty underside, reward
+emergence/headroom and settle path) in `block-rules.ts` before building anything. Head bumps must
+use previous-step body geometry plus Arcade upward contact in `isHeadBump()`; never classify from
+velocity or overlap alone. One block latch prevents repeated payouts and rearms only after real
+separation. Break eligibility comes from the validated `break.forms` list (shipped: Big only). Break
+disables the static body synchronously; reward settlement is a separate `unused → activating → used`
+state machine. Reward release is scripted with gameplay delta (emerge above, settle above ground
+below), not tween callbacks, and reuses `CollectionSystem`/`BombSystem`/`EffectSystem`. Broken blocks
+must disappear from live solid queries; intact block bodies join enemy/projectile colliders. No
+weapon/explosion block damage in 008-A. Falling preserves block state; Retry restores JSON; terminal
+paths freeze the system and clear colliders/debris.
+
 Task 007-B weapon rules: validate `content/config/weapons.json` before boot. Only the implemented
 `energy-ball` id is accepted. Energy flowers are normal collectible pickups routed through
 `CollectionSystem`, grant a temporary `ActiveEffects` ability window, award no score and are never
@@ -44,11 +58,12 @@ technical architect reviews each task. Read this file before doing anything.
   **Vitest 5.1.1**, npm, JSON content, Phaser Arcade Physics.
 - Logical resolution 1280×720, landscape-first, FIT scaling, WebGL with Canvas fallback.
 - No React/Vue/Angular/Next.js, no backend, no authentication, no database, no cloud services.
-- Current milestone: **Task 007-B** — JSON-driven levels, terrain/collision generation,
+- Current milestone: **Task 008-A** — JSON-driven levels, terrain/collision generation,
   goal marker, camera follow, collectibles, scoring/rating, progression, local save, JSON
   enemy archetypes, patrol behavior, stomp/damage combat, player health/invulnerability, a
   Game Over/retry flow, bomb throws and explosion combat, shield, coin magnet, player growth,
-  and the temporary Energy Ball weapon with its validated weapon configuration.
+  the temporary Energy Ball weapon with its validated weapon configuration, and breakable
+  bricks/reward blocks with validated head-bump interactions.
 
 ## Mandatory rules
 
@@ -164,6 +179,31 @@ Phaser-aware.
   reset body defaults. Resolve collider callback arguments in either order (Phaser does not guarantee
   them). Direct-hit damage must use `EnemySystem.damageEnemy()`; never create a second health or
   score ledger. Freeze damage and remove projectiles on Victory, Game Over and shutdown.
+- Interactive block tuning lives only in `content/config/interactive-blocks.json` and is validated by
+  `validateInteractiveBlocksConfig()`. Rules live in `block-rules.ts` (pure), orchestration in
+  `InteractiveBlockSystem.ts`, the solid/visual entity in `entities/InteractiveBlock.ts`, and
+  construction in `factories/InteractiveBlockFactory.ts`.
+- A block is one tile-sized static body. The bump tween moves only the image. Break sets the state to
+  `destroyed`, disables the body/collision synchronously, then fades the visual; never remove the
+  body only after an animation.
+- Head bumps must pass `isHeadBump()`: previous body top, current edges, horizontal overlap, Arcade
+  upward contact and actual rise. The per-block `contactLatched` flag is cleared only after real
+  separation. Do not use velocity or raw overlap alone.
+- Break permission comes from `interactive-blocks.json` `break.forms` (shipped `["big"]`) and the
+  live `PlayerTransformation` form; an expired Big form is small and cannot break.
+- Reward blocks are one-use (`unused → activating → used`) and stay solid. Reward creation is
+  idempotent and uses the stable key `reward:<authored block id>`. Release timing advances with
+  gameplay delta; do not put payout logic in a tween callback.
+- Reward items must reuse `Collectible`/`CollectionSystem`, `BombSystem` or `EffectSystem`. Bomb
+  rewards use BombSystem's pickup group. Never create a second inventory, effect clock or score
+  ledger. Reward coins add run count/score but do not change authored totals or the rating
+  denominator.
+- Broken blocks must disappear from live solid queries (`InteractiveBlockSystem.solidRects`) and
+  from Arcade collisions through their disabled bodies. Intact block bodies are passed to enemy,
+  bomb and Energy Ball colliders. Do not maintain a parallel collision map.
+- Bombs, explosions and Energy Balls must not break or activate blocks in Task 008-A. They treat
+  intact blocks as solid and pass through broken bricks. A future interaction needs an explicit task
+  and reviewed rule.
 - Never classify stomps from velocity alone: Arcade separation can zero velocity before the
   callback. Use previous-step body geometry plus current enemy geometry.
 - The player/enemy contact handler is exclusive: one contact resolves as either a stomp or player
@@ -236,6 +276,15 @@ Phaser-aware.
   and validated at startup. Invalid values block the game; never guess defaults.
 - `content/config/weapons.json` is versioned (`schemaVersion: 1`), validated by
   `validateWeaponConfig()` before boot, and rejects unknown weapon IDs. Only `energy-ball` exists.
+- `content/config/interactive-blocks.json` is versioned (`schemaVersion: 1`) and validated by
+  `validateInteractiveBlocksConfig()` before boot. Bump/break/debris/reward timings and the break
+  form list are configuration; the two block archetypes are code.
+- `interactive-block` level objects require a unique id and a `blockId`. Reward blocks require one
+  supported reward type; bricks forbid a reward. Place blocks in empty cells with an empty underside;
+  reward blocks also need two clear cells above and a solid ground cell below with an empty settle
+  cell. Invalid placements block the level with field paths.
+- Never author an interactive block inside solid terrain or another interactive block. A used reward
+  block and a breakable brick are separate solid objects; broken bricks do not come back until Retry.
 - `energy-flower` uses the collectible tile-center convention, grants a temporary ability, awards no
   score and has no rating or save impact. It must not be authored inside solid terrain.
 - Enemy placements are validated structurally and cross-checked against the archetype registry and
@@ -272,6 +321,12 @@ Phaser-aware.
 - Weapon changes also need `/tests/energy-ball-browser.html?touch=1`: activation/refresh, HUD, C/K
   edge input, cooldown/limits, bounce/wall/ceiling, lifetime, enemy damage/score, fall, Retry,
   Victory/Game Over, touch FIRE and restart stability.
+- Interactive-block changes also need `/tests/interactive-blocks-browser.html?level=<id>`: small
+  bump without break, Big break/body removal/pass-through, side/landing rejection, reward
+  activation once/used solidity, coin/bomb/shield/magnet/growth/energy settlement, fall
+  preservation, restart restoration, collider count stability and no console errors. Run it for
+  levels 01–03. The harness uses real keyboard events plus scripted positioning; state whether a
+  check was scripted rather than natural.
 - Force touch controls with `?touch=1` when the test machine has no touchscreen. Synthetic touch
   events verify the Phaser input path, not a real device; say which was used.
 - If a background browser tab throttles `requestAnimationFrame`, stop `game.loop` and call
